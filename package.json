@@ -1,0 +1,14 @@
+{
+  "name": "vesper",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Vesper - a fast, small Minecraft: Java Edition launcher",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon src-tauri/app-icon.svg"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
