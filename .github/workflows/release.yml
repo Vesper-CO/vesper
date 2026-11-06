@@ -18,6 +18,14 @@ jobs:
         with: { workspaces: 'src-tauri -> target' }
       - run: npm install
       - uses: tauri-apps/tauri-action@v0
+      - name: Attach vesper.exe to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          Copy-Item $setup.FullName vesper.exe
+          gh release upload "${{ github.ref_name }}" vesper.exe --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
