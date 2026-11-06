@@ -13,9 +13,9 @@ export async function render(el) {
       <label class="field"><span>Default memory for new instances: <b id="ramv">${ramLabel(s.default_ram_mb)}</b></span><input type="range" id="ram" min="1024" max="16384" step="512" value="${s.default_ram_mb}"></label>
       <label class="field"><span>Custom java.exe (optional)</span><input type="text" id="java" value="${esc(s.java_path)}" placeholder="Leave empty to use the Java that Mojang provides"></label>
     </div>
-    <h2>Microsoft sign-in</h2>
-    <div class="card"><label class="field"><span>Azure application (client) ID</span><input type="text" id="cid" value="${esc(s.ms_client_id)}" placeholder="00000000-0000-0000-0000-000000000000"></label>
-      <p class="muted">Needed once, to sign in with your own Microsoft app registration. See the README, step 2.</p></div>
+    <h2>Microsoft sign-in (advanced)</h2>
+    <div class="card"><label class="field"><span>Custom Azure application (client) ID</span><input type="text" id="cid" value="${esc(s.ms_client_id)}" placeholder="Leave empty to use Vesper's built-in app"></label>
+      <p class="muted">Optional. Only fill this in to sign in through your own Azure app registration.</p></div>
     <h2>Updates</h2>
     <div class="card"><div class="row" style="justify-content:space-between"><span>Install new Vesper versions automatically</span><button class="switch ${s.auto_update ? 'on' : ''}" id="auto" role="switch" aria-checked="${s.auto_update}" aria-label="Automatic updates"></button></div>
       <div class="row"><button class="btn" id="check">Check for updates</button><button class="btn" id="data">Open data folder</button></div></div>

@@ -112,7 +112,11 @@ async fn post_json(url: &str, body: &Value) -> Result<Value> {
     Ok(client().post(url).json(body).send().await?.json().await?)
 }
 
+/// Vesper's built-in Azure application (client) ID. This is a public identifier, not a secret.
+const DEFAULT_CLIENT_ID: &str = "c5249c24-698c-49e5-b047-eb7ae88913a4";
+
 fn client_id() -> Result<String> {
+    // Optional override from Settings (for developers using their own Azure app).
     let s = settings::load().ms_client_id;
     if !s.trim().is_empty() {
         return Ok(s.trim().to_string());
@@ -122,7 +126,7 @@ fn client_id() -> Result<String> {
             return Ok(c.to_string());
         }
     }
-    bail!("No Microsoft client ID is set. Add your Azure app's Application (client) ID in Settings, under Microsoft sign-in.")
+    Ok(DEFAULT_CLIENT_ID.to_string())
 }
 
 // ---------- Xbox / Minecraft chain ----------
