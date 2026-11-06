@@ -2,6 +2,7 @@ import { appWindow, invoke, listen } from './api.js';
 import { S, loadAll } from './state.js';
 import { $, toast, errMsg } from './util.js';
 import { buildNav, go, registerViews, showProgress, appendLog, syncPlayUI, promptUpdate } from './shell.js';
+import { startBackground } from './background.js';
 import * as home from './views/home.js';
 import * as instances from './views/instances.js';
 import * as mods from './views/mods.js';
@@ -9,6 +10,27 @@ import * as accounts from './views/accounts.js';
 import * as settings from './views/settings.js';
 
 registerViews({ home, instances, mods, accounts, settings });
+startBackground(document.getElementById('bg'));
+
+// Cursor spotlight and gentle tilt on cards.
+const HOVERABLE = '.card,.mod,.news-card';
+document.addEventListener('pointermove', (e) => {
+  const el = e.target.closest?.(HOVERABLE); if (!el) return;
+  const r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  el.style.setProperty('--mx', x + 'px'); el.style.setProperty('--my', y + 'px');
+  if (r.width < 520) { el.style.setProperty('--ry', ((x / r.width - 0.5) * 9).toFixed(2) + 'deg'); el.style.setProperty('--rx', ((0.5 - y / r.height) * 9).toFixed(2) + 'deg'); }
+});
+document.addEventListener('pointerout', (e) => {
+  const el = e.target.closest?.(HOVERABLE);
+  if (el && !el.contains(e.relatedTarget)) { el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); }
+});
+// Button ripple.
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('.btn'); if (!b || b.disabled) return;
+  const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2, s = document.createElement('span');
+  s.className = 'ripple'; s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`;
+  b.append(s); setTimeout(() => s.remove(), 650);
+});
 
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-ext]');

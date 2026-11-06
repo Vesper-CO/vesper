@@ -3,6 +3,8 @@ import { S, activeAccount } from '../state.js';
 import { esc, skeleton, LOADER_NAMES, ramLabel, ICON } from '../util.js';
 import { go, play, syncPlayUI } from '../shell.js';
 
+const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
+
 export async function render(el) {
   const acct = activeAccount();
   if (!S.instances.some((i) => i.id === S.homeInstance)) S.homeInstance = S.instances[0]?.id ?? null;
@@ -11,7 +13,7 @@ export async function render(el) {
   el.innerHTML = `<div class="page">
     <section class="hero">
       <div>
-        <h1>${acct ? `Welcome back, ${esc(acct.name)}` : 'Welcome to Vesper'}</h1>
+        <h1>${acct ? `${greeting()}, ${esc(acct.name)}` : 'Welcome to Vesper'}</h1>
         <p class="muted" style="margin-top:6px">${acct ? 'Pick an instance and jump in.' : 'Sign in with Microsoft to start playing.'}</p>
       </div>
       <div class="play-box">
