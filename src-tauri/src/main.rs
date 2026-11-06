@@ -35,14 +35,21 @@ fn open_data_folder(app: AppHandle) -> CmdResult<()> {
     Ok(())
 }
 
-/// Returns the new version number if an update is available.
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    current: String,
+    notes: String,
+}
+
+/// Returns details of a newer version if one is available.
 #[tauri::command]
-async fn check_update(app: AppHandle) -> CmdResult<Option<String>> {
+async fn check_update(app: AppHandle) -> CmdResult<Option<UpdateInfo>> {
     use tauri_plugin_updater::UpdaterExt;
     if !app.state::<UpdaterReady>().0 {
         return Ok(None);
     }
-    Ok(app.updater()?.check().await?.map(|u| u.version))
+    Ok(app.updater()?.check().await?.map(|u| UpdateInfo { version: u.version, current: u.current_version, notes: u.body.unwrap_or_default() }))
 }
 
 /// Download, install and restart into the new version.

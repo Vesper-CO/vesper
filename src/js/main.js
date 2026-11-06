@@ -1,7 +1,7 @@
 import { appWindow, invoke, listen } from './api.js';
 import { S, loadAll } from './state.js';
 import { $, toast, errMsg } from './util.js';
-import { buildNav, go, registerViews, showProgress, appendLog, syncPlayUI } from './shell.js';
+import { buildNav, go, registerViews, showProgress, appendLog, syncPlayUI, promptUpdate } from './shell.js';
 import * as home from './views/home.js';
 import * as instances from './views/instances.js';
 import * as mods from './views/mods.js';
@@ -38,8 +38,8 @@ async function boot() {
   go('home');
   if (S.settings.auto_update) {
     try {
-      const v = await invoke('check_update');
-      if (v) { toast(`Updating Vesper to ${v}...`); await invoke('install_update'); }
+      const info = await invoke('check_update');
+      if (info) promptUpdate(info);
     } catch { /* offline or updates not configured: ignore */ }
   }
 }

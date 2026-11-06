@@ -1,6 +1,7 @@
 import { invoke } from '../api.js';
 import { S, applyTheme } from '../state.js';
 import { $, esc, toast, errMsg, ramLabel } from '../util.js';
+import { promptUpdate } from '../shell.js';
 
 export async function render(el) {
   const s = S.settings;
@@ -17,7 +18,7 @@ export async function render(el) {
     <div class="card"><label class="field"><span>Custom Azure application (client) ID</span><input type="text" id="cid" value="${esc(s.ms_client_id)}" placeholder="Leave empty to use Vesper's built-in app"></label>
       <p class="muted">Optional. Only fill this in to sign in through your own Azure app registration.</p></div>
     <h2>Updates</h2>
-    <div class="card"><div class="row" style="justify-content:space-between"><span>Install new Vesper versions automatically</span><button class="switch ${s.auto_update ? 'on' : ''}" id="auto" role="switch" aria-checked="${s.auto_update}" aria-label="Automatic updates"></button></div>
+    <div class="card"><div class="row" style="justify-content:space-between"><span>Check for updates when Vesper starts</span><button class="switch ${s.auto_update ? 'on' : ''}" id="auto" role="switch" aria-checked="${s.auto_update}" aria-label="Check for updates on start"></button></div>
       <div class="row"><button class="btn" id="check">Check for updates</button><button class="btn" id="data">Open data folder</button></div></div>
     <p class="muted" style="margin-top:22px">Vesper is an unofficial launcher. It is not approved by or associated with Mojang or Microsoft. Minecraft game files are downloaded from Mojang's servers on your computer and are never redistributed by Vesper.</p>
   </div>`;
@@ -30,6 +31,6 @@ export async function render(el) {
   $('#auto').onclick = (e) => { S.settings.auto_update = !S.settings.auto_update; e.target.classList.toggle('on', S.settings.auto_update); e.target.setAttribute('aria-checked', S.settings.auto_update); save(); };
   $('#data').onclick = () => invoke('open_data_folder');
   $('#check').onclick = async () => {
-    try { const v = await invoke('check_update'); if (!v) return toast('Vesper is up to date', 'ok'); toast(`Installing ${v}...`); await invoke('install_update'); } catch (e) { toast(errMsg(e), 'error'); }
+    try { const info = await invoke('check_update'); if (!info) return toast('Vesper is up to date', 'ok'); promptUpdate(info); } catch (e) { toast(errMsg(e), 'error'); }
   };
 }

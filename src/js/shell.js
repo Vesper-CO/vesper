@@ -1,7 +1,7 @@
 // App chrome: navigation, router, account chip, progress dock, console drawer and play helper.
 import { invoke } from './api.js';
 import { S, activeAccount } from './state.js';
-import { $, $$, esc, ICON, toast, errMsg } from './util.js';
+import { $, $$, esc, md, modal, ICON, toast, errMsg } from './util.js';
 
 const NAV = [['home', 'Home'], ['instances', 'Instances'], ['mods', 'Mod Library'], ['accounts', 'Accounts'], ['settings', 'Settings']];
 let views = {};
@@ -105,4 +105,20 @@ export async function play(id) {
     toast(errMsg(e), 'error');
   }
   syncPlayUI();
+}
+
+// ----- update prompt -----
+export function promptUpdate(info) {
+  const m = modal(`<h2>Vesper ${esc(info.version)} is available</h2>
+    <p class="muted">You are on version ${esc(info.current)}.</p>
+    ${info.notes ? `<div class="desc selectable" style="max-height:240px;overflow:auto;margin-top:12px">${md(info.notes)}</div>` : ''}
+    <div class="foot"><button class="btn" id="later">Later</button><button class="btn primary" id="now">Update now</button></div>`);
+  m.el.querySelector('#later').onclick = m.close;
+  const now = m.el.querySelector('#now');
+  now.onclick = async () => {
+    now.disabled = true; now.textContent = 'Downloading...';
+    m.el.querySelector('#later').disabled = true;
+    try { await invoke('install_update'); } // the app restarts when this succeeds
+    catch (e) { toast(errMsg(e), 'error'); now.disabled = false; now.textContent = 'Update now'; m.el.querySelector('#later').disabled = false; }
+  };
 }
