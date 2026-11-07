@@ -10,6 +10,7 @@ mod modrinth;
 mod mojang;
 mod mrpack;
 mod paths;
+mod rust;
 mod settings;
 
 use error::CmdResult;

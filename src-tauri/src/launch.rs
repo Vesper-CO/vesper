@@ -1,13 +1,13 @@
 //! Builds the Java command line from Mojang's version JSON and runs the game,
 //! streaming stdout/stderr to the UI console.
-use crate::{auth, error::CmdResult, instances, loaders, mojang, paths};
+use crate::{auth, error::CmdResult, instances, loaders, mojang, paths, rust};
 use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use std::{collections::HashMap, io::Read, path::Path, process::Stdio, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, BufReader},
-    process::Command,
+    process::{Child, Command},
     sync::oneshot,
 };
 
@@ -64,6 +64,28 @@ fn extract_natives(jars: &[std::path::PathBuf], dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// One line of text for the instance's console.
+pub fn log(app: &AppHandle, id: &str, line: &str, stream: &str) {
+    let _ = app.emit("game-log", json!({"id": id, "line": line, "stream": stream}));
+}
+
+/// Take over a running game: stream its output to the console, allow Stop, report its exit.
+pub fn supervise(app: &AppHandle, running: &Running, id: String, mut child: Child) {
+    if let Some(o) = child.stdout.take() { pipe(app.clone(), id.clone(), o, "out"); }
+    if let Some(e) = child.stderr.take() { pipe(app.clone(), id.clone(), e, "err"); }
+    let (tx, rx) = oneshot::channel::<()>();
+    running.0.lock().unwrap().insert(id.clone(), tx);
+    let app2 = app.clone();
+    tokio::spawn(async move {
+        let code = tokio::select! {
+            s = child.wait() => s.ok().and_then(|s| s.code()),
+            _ = rx => { let _ = child.kill().await; None }
+        };
+        app2.state::<Running>().0.lock().unwrap().remove(&id);
+        let _ = app2.emit("game-exit", json!({"id": id, "code": code}));
+    });
+}
+
 fn pipe<R: AsyncRead + Unpin + Send + 'static>(app: AppHandle, id: String, r: R, stream: &'static str) {
     tokio::spawn(async move {
         let mut rd = BufReader::new(r);
@@ -90,6 +112,12 @@ pub async fn play(app: AppHandle, state: State<'_, Running>, id: String) -> CmdR
 
     stage(&app, &id, "Checking your account");
     let sess = auth::session().await?;
+
+    // Rust instances run Horizon instead of Java.
+    if inst.loader == "rust" {
+        rust::play(app.clone(), state.inner(), inst, sess).await?;
+        return Ok(());
+    }
 
     stage(&app, &id, "Preparing version");
     if inst.version_id.is_empty() || !paths::version_json(&inst.version_id).exists() {
@@ -166,25 +194,11 @@ pub async fn play(app: AppHandle, state: State<'_, Running>, id: String) -> CmdR
     cmd.args(&args).current_dir(&game_dir).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no stray console
-    let mut child = cmd.spawn().with_context(|| format!("Could not start Java at {}", java.display()))?;
-
-    pipe(app.clone(), id.clone(), child.stdout.take().unwrap(), "out");
-    pipe(app.clone(), id.clone(), child.stderr.take().unwrap(), "err");
-    let (tx, rx) = oneshot::channel::<()>();
-    state.0.lock().unwrap().insert(id.clone(), tx);
+    let child = cmd.spawn().with_context(|| format!("Could not start Java at {}", java.display()))?;
 
     inst.last_played = instances::now();
     let _ = instances::save(&inst);
-
-    let (app2, id2) = (app.clone(), id.clone());
-    tokio::spawn(async move {
-        let code = tokio::select! {
-            s = child.wait() => s.ok().and_then(|s| s.code()),
-            _ = rx => { let _ = child.kill().await; None }
-        };
-        app2.state::<Running>().0.lock().unwrap().remove(&id2);
-        let _ = app2.emit("game-exit", json!({"id": id2, "code": code}));
-    });
+    supervise(&app, state.inner(), id.clone(), child);
     stage(&app, &id, "Running");
     Ok(())
 }

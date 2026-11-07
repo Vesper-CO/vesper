@@ -7,19 +7,21 @@ const TYPES = [['mod', 'Mods'], ['resourcepack', 'Resource packs'], ['shader', '
 const SORTS = [['relevance', 'Most relevant'], ['downloads', 'Most downloaded'], ['follows', 'Most followed'], ['newest', 'Newest'], ['updated', 'Recently updated']];
 const M = { type: 'mod', q: '', cat: '', sort: 'relevance', compat: true, offset: 0, hits: [], total: 0, cats: null, busy: false };
 const LOADER_COMPAT = { fabric: ['fabric'], quilt: ['quilt', 'fabric'], forge: ['forge'], neoforge: ['neoforge'], vanilla: [] };
-const target = () => S.instances.find((i) => i.id === S.target) || S.instances[0];
+const eligible = () => S.instances.filter((i) => i.loader !== 'rust'); // Rust instances have no mods yet
+const target = () => eligible().find((i) => i.id === S.target) || eligible()[0];
 
 export async function render(el) {
   await refreshInstances();
-  if (!S.instances.length) {
-    el.innerHTML = `<div class="page"><div class="page-head"><h1>Mod Library</h1></div><div class="empty"><b>Create an instance first</b><span>Content is installed into an instance, so Vesper can check that it fits its version and loader.</span><button class="btn primary" id="go">Go to Instances</button></div></div>`;
+  if (!eligible().length) {
+    const onlyRust = S.instances.length > 0;
+    el.innerHTML = `<div class="page"><div class="page-head"><h1>Mod Library</h1></div><div class="empty"><b>${onlyRust ? 'Mods are not available for Rust yet' : 'Create an instance first'}</b><span>${onlyRust ? 'Create a Fabric, Quilt, Forge or NeoForge instance to browse and install mods.' : 'Content is installed into an instance, so Vesper can check that it fits its version and loader.'}</span><button class="btn primary" id="go">Go to Instances</button></div></div>`;
     $('#go').onclick = () => go('instances'); return;
   }
-  if (!S.instances.some((i) => i.id === S.target)) S.target = S.instances[0].id;
+  if (!eligible().some((i) => i.id === S.target)) S.target = eligible()[0].id;
   const inst = target();
   el.innerHTML = `<div class="page">
     <div class="page-head"><div><h1>Mod Library</h1><p class="muted">Powered by Modrinth</p></div>
-      <label class="field" style="margin:0;min-width:260px"><span>Install into</span><select id="inst">${S.instances.map((i) => `<option value="${i.id}" ${i.id === S.target ? 'selected' : ''}>${esc(i.name)} (${LOADER_NAMES[i.loader]} ${esc(i.mc_version)})</option>`).join('')}</select></label></div>
+      <label class="field" style="margin:0;min-width:260px"><span>Install into</span><select id="inst">${eligible().map((i) => `<option value="${i.id}" ${i.id === S.target ? 'selected' : ''}>${esc(i.name)} (${LOADER_NAMES[i.loader]} ${esc(i.mc_version)})</option>`).join('')}</select></label></div>
     <div class="tabs" id="tabs">${TYPES.map(([k, v]) => `<button class="tab ${M.type === k ? 'active' : ''}" data-t="${k}">${v}</button>`).join('')}</div>
     <div id="body"></div></div>`;
   $('#inst').onchange = (e) => { S.target = e.target.value; render(el); };

@@ -85,6 +85,7 @@ pub async fn install(app: &AppHandle, inst: &mut Instance) -> Result<()> {
             inst.loader_version = lv;
         }
         "forge" | "neoforge" => install_with_installer(app, inst).await?,
+        "rust" => inst.version_id = "rust".into(), // Rust instances never use a Java version profile
         other => bail!("Unknown loader {other}"),
     }
     Ok(())

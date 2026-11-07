@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, State};
 
-const LOADERS: [&str; 5] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
+const LOADERS: [&str; 6] = ["vanilla", "fabric", "quilt", "forge", "neoforge", "rust"];
 fn d_ram() -> u32 { 4096 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -61,6 +61,8 @@ pub fn list() -> Result<Vec<Instance>> {
 }
 
 pub fn create(name: &str, mc: &str, loader: &str, lv: Option<String>, ram: u32) -> Result<Instance> {
+    // Rust runs the one Minecraft version Horizon is built for, with no loader.
+    let (mc, lv) = if loader == "rust" { (crate::rust::MC_VERSION, None) } else { (mc, lv) };
     if name.trim().is_empty() {
         bail!("Give the instance a name");
     }
@@ -100,6 +102,10 @@ pub fn update_instance(inst: Instance) -> CmdResult<Instance> {
     new.created = old.created;
     new.last_played = old.last_played;
     new.ram_mb = new.ram_mb.clamp(1024, 65536);
+    if new.loader == "rust" {
+        new.mc_version = crate::rust::MC_VERSION.into();
+        new.loader_version.clear();
+    }
     // Changing version or loader means the launch profile must be rebuilt on next Play.
     if new.mc_version != old.mc_version || new.loader != old.loader || new.loader_version != old.loader_version {
         new.version_id = String::new();

@@ -260,6 +260,11 @@ pub async fn ensure_java(app: &AppHandle, v: &Value) -> Result<PathBuf> {
     if !custom.trim().is_empty() {
         return Ok(PathBuf::from(custom.trim()));
     }
+    ensure_runtime(app, v).await
+}
+
+/// Mojang's own Java runtime for this version, ignoring any custom java.exe from Settings.
+pub async fn ensure_runtime(app: &AppHandle, v: &Value) -> Result<PathBuf> {
     let comp = v["javaVersion"]["component"].as_str().unwrap_or("jre-legacy").to_string();
     let dir = paths::runtimes().join(&comp);
     let exe = dir.join("bin").join("java.exe");

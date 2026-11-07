@@ -23,9 +23,9 @@ export async function render(el) {
         <div class="row" style="gap:0;flex-wrap:nowrap"><button class="icon-btn" data-a="folder" data-id="${i.id}" title="Open folder">${ICON.folder}</button>
         <button class="icon-btn" data-a="edit" data-id="${i.id}" title="Edit">${ICON.edit}</button>
         <button class="icon-btn" data-a="del" data-id="${i.id}" title="Delete">${ICON.trash}</button></div></div>
-      <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span><span class="chip">${ramLabel(i.ram_mb)}</span></div>
+      <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span>${i.loader === 'rust' ? '<span class="chip">No Java</span>' : `<span class="chip">${ramLabel(i.ram_mb)}</span>`}</div>
       <small class="muted">${ago(i.last_played)}</small>
-      <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button><button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button></div>
+      <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button>${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button>`}</div>
     </div>`).join('');
   grid.onclick = async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
@@ -41,6 +41,7 @@ export async function render(el) {
   syncPlayUI();
 }
 
+const RUST_NOTE = 'Rust runs Minecraft 26.3 natively, rewritten in Rust with no Java, so memory and Java settings do not apply. Mods are off for now. You need a graphics card with Vulkan or DirectX 12. The first launch downloads the Rust build and prepares the game from your own Minecraft account, which takes a few minutes.';
 const typeOf = (v) => (v.type === 'release' ? 'release' : v.type === 'snapshot' ? 'snapshot' : 'old');
 
 async function form(inst, done) {
@@ -48,13 +49,13 @@ async function form(inst, done) {
   const cur = inst ? versions.find((v) => v.id === inst.mc_version) : null;
   const m = modal(`<h2>${inst ? 'Edit instance' : 'New instance'}</h2>
     <label class="field"><span>Name</span><input type="text" id="f-name" maxlength="40" value="${esc(inst?.name || '')}" placeholder="My survival world"></label>
-    <div class="row"><label class="field grow"><span>Minecraft</span><select id="f-ver"></select></label>
+    <div class="row" id="r-ver"><label class="field grow"><span>Minecraft</span><select id="f-ver"></select></label>
       <label class="field" style="width:150px"><span>Show</span><select id="f-type"><option value="release">Releases</option><option value="snapshot">Snapshots</option><option value="old">Old versions</option></select></label></div>
     <div class="row"><label class="field grow"><span>Mod loader</span><select id="f-loader">${Object.entries(LOADER_NAMES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
-      <label class="field grow"><span>Loader version</span><select id="f-lv"></select></label></div>
+      <label class="field grow" id="l-lv"><span>Loader version</span><select id="f-lv"></select></label></div>
     <p class="muted" id="f-note" style="margin:-6px 0 12px"></p>
-    <label class="field"><span>Memory: <b id="f-ramv"></b></span><input type="range" id="f-ram" min="1024" max="16384" step="512"></label>
-    <label class="field"><span>Extra JVM arguments</span><textarea id="f-jvm" rows="2" placeholder="-XX:+UseG1GC"></textarea></label>
+    <label class="field" id="l-ram"><span>Memory: <b id="f-ramv"></b></span><input type="range" id="f-ram" min="1024" max="16384" step="512"></label>
+    <label class="field" id="l-jvm"><span>Extra JVM arguments</span><textarea id="f-jvm" rows="2" placeholder="-XX:+UseG1GC"></textarea></label>
     <div class="foot"><button class="btn" id="f-cancel">Cancel</button><button class="btn primary" id="f-save">${inst ? 'Save' : 'Create'}</button></div>`);
   const $m = (s) => m.el.querySelector(s);
   $m('#f-type').value = cur ? typeOf(cur) : 'release';
@@ -72,6 +73,9 @@ async function form(inst, done) {
   let token = 0;
   const fillLoader = async () => {
     const loader = $m('#f-loader').value, mc = $m('#f-ver').value, my = ++token;
+    const rust = loader === 'rust';
+    for (const s of ['#r-ver', '#l-lv', '#l-ram', '#l-jvm']) $m(s).style.display = rust ? 'none' : '';
+    if (rust) { $m('#f-save').disabled = false; $m('#f-note').textContent = RUST_NOTE; return; }
     $m('#f-lv').disabled = loader === 'vanilla';
     $m('#f-save').disabled = false;
     if (loader === 'vanilla') { $m('#f-lv').innerHTML = '<option value="">Not needed</option>'; $m('#f-note').textContent = ''; return; }

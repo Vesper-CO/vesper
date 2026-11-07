@@ -8,7 +8,7 @@ export const ramLabel = (mb) => (mb % 1024 ? (mb / 1024).toFixed(1) : mb / 1024)
 export const headHtml = (a, size = 34) => a?.skin
   ? `<span class="head" style="--s:${size}px;--skin:url('${esc(a.skin)}')"><i></i><i></i></span>`
   : `<img class="avatar" style="width:${size}px;height:${size}px" alt="" src="https://mc-heads.net/avatar/${esc(a?.uuid || '')}/${size * 2}">`;
-export const LOADER_NAMES = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
+export const LOADER_NAMES = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge', rust: 'Rust' };
 
 export function ago(ts) {
   if (!ts) return 'Never played';

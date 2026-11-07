@@ -21,6 +21,7 @@ pub fn assets() -> PathBuf { shared().join("assets") }
 pub fn versions() -> PathBuf { shared().join("versions") }
 pub fn runtimes() -> PathBuf { root().join("runtimes") }
 pub fn instances() -> PathBuf { root().join("instances") }
+pub fn rust() -> PathBuf { root().join("rust") }
 pub fn tmp() -> PathBuf { root().join("tmp") }
 pub fn version_json(id: &str) -> PathBuf { versions().join(id).join(format!("{id}.json")) }
 pub fn version_jar(id: &str) -> PathBuf { versions().join(id).join(format!("{id}.jar")) }

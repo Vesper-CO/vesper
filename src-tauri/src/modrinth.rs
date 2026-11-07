@@ -147,6 +147,9 @@ fn install_inner<'a>(app: &'a AppHandle, inst: &'a Instance, pid: String, versio
         if kind == "modpack" {
             bail!("Modpacks are installed as new instances");
         }
+        if inst.loader == "rust" {
+            bail!("Mods are not available for Rust instances yet.");
+        }
         if kind == "mod" && inst.loader == "vanilla" {
             bail!("Mods need a loader. Edit this instance and pick Fabric, Quilt, Forge or NeoForge.");
         }
@@ -269,6 +272,9 @@ pub fn modrinth_remove(instance_id: String, kind: String, filename: String) -> C
 #[tauri::command]
 pub async fn modrinth_update_all(app: AppHandle, instance_id: String) -> CmdResult<usize> {
     let inst = instances::load(&instance_id)?;
+    if inst.loader == "rust" {
+        return Err(anyhow!("Mods are not available for Rust instances yet.").into());
+    }
     let items: Vec<Item> = read_items(&instance_id).into_iter().filter(|i| !i.sha1.is_empty()).collect();
     let mut updated = 0;
     for kind in ["mod", "resourcepack", "shader"] {

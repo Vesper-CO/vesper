@@ -27,7 +27,7 @@ export async function render(el) {
     ${recent.length ? `<h2>Recent instances</h2><div class="grid">${recent.map((i) => `
       <button class="card" data-open="${i.id}" style="text-align:left">
         <h3>${esc(i.name)}</h3>
-        <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span><span class="chip">${ramLabel(i.ram_mb)}</span></div>
+        <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span>${i.loader === 'rust' ? '' : `<span class="chip">${ramLabel(i.ram_mb)}</span>`}</div>
       </button>`).join('')}</div>` : ''}
     <h2>Minecraft news</h2>
     <div class="news" id="news">${skeleton(3, 'news-card')}</div>
