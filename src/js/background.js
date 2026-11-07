@@ -4,6 +4,7 @@ const DW = 1500, DH = 900;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 export function startBackground(canvas) {
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let W = 0, H = 0, dpr = 1, scale = 1, ox = 0, oy = 0;

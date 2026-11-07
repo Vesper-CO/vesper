@@ -10,7 +10,8 @@ import * as accounts from './views/accounts.js';
 import * as settings from './views/settings.js';
 
 registerViews({ home, instances, mods, accounts, settings });
-startBackground(document.getElementById('bg'));
+// The background is decoration: if it ever fails, the app must still work.
+try { startBackground(document.getElementById('bg')); } catch (e) { console.warn('background disabled', e); }
 
 // Cursor spotlight and gentle tilt on cards.
 const HOVERABLE = '.card,.mod,.news-card';
