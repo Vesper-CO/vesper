@@ -15,17 +15,11 @@ jobs:
         with: { node-version: 20 }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with: { workspaces: 'src-tauri -> target' }
+        with: { workspaces: |
+            src-tauri -> target
+            installer/src-tauri -> target }
       - run: npm install
       - uses: tauri-apps/tauri-action@v0
-      - name: Attach vesper.exe to the release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
-          Copy-Item $setup.FullName vesper.exe
-          gh release upload "${{ github.ref_name }}" vesper.exe --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -35,3 +29,22 @@ jobs:
           releaseName: 'Vesper ${{ github.ref_name }}'
           releaseBody: 'Download the Setup.exe below. Existing installs update themselves.'
           includeUpdaterJson: true
+
+      # The branded installer wraps the NSIS setup above (which the in-app updater also uses).
+      - name: Build Vesper-Setup.exe
+        shell: pwsh
+        run: |
+          $nsis = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Force installer/src-tauri/payload | Out-Null
+          Copy-Item $nsis.FullName installer/src-tauri/payload/vesper-setup.exe
+          Push-Location installer
+          npm install
+          npx tauri build --no-bundle
+          Pop-Location
+          Copy-Item installer/src-tauri/target/release/vesper-setup.exe Vesper-Setup.exe
+
+      - name: Attach Vesper-Setup.exe to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" Vesper-Setup.exe --clobber

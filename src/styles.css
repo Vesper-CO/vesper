@@ -167,3 +167,9 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 @keyframes toast-in { from { opacity: 0; transform: translateX(40px) scale(.92); } }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* player head drawn from the real skin texture (face + hat layers) */
+.head { position: relative; display: inline-block; flex: none; width: var(--s, 34px); height: var(--s, 34px); border-radius: 9px; overflow: hidden; background: var(--glass2); image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line); }
+.head i { position: absolute; inset: 0; background-image: var(--skin); background-repeat: no-repeat; background-size: calc(var(--s) * 8) auto; image-rendering: pixelated; }
+.head i:first-child { background-position: calc(var(--s) * -1) calc(var(--s) * -1); }
+.head i:last-child { background-position: calc(var(--s) * -5) calc(var(--s) * -1); }

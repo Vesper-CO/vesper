@@ -1,0 +1,49 @@
+:root { --text:#ecebf7; --muted:#a09fba; --accent:#8f7cff; --ink:#0d0b1f; --soft:rgba(143,124,255,.18); --glass:rgba(18,16,40,.62); --glass2:rgba(34,30,72,.55); --line:rgba(172,160,255,.18); --ok:#66e0a8; --danger:#ff7a89; --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.34,1.56,.64,1); color-scheme:dark; }
+* { box-sizing:border-box; margin:0; }
+html,body { height:100%; }
+body { font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; background:#0b0b17; color:var(--text); overflow:hidden; user-select:none; -webkit-font-smoothing:antialiased; }
+button { font:inherit; color:inherit; cursor:pointer; border:0; background:none; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+#bg { position:fixed; inset:0; }
+.shell { position:relative; height:100vh; display:grid; grid-template-rows:38px 1fr; }
+.titlebar { display:flex; justify-content:space-between; align-items:center; padding-left:14px; }
+.brand { display:flex; align-items:center; gap:8px; font-weight:650; font-size:13px; }
+.brand img { width:18px; height:18px; }
+.wc { display:flex; height:100%; } .wc button { width:44px; display:grid; place-items:center; color:#b9b7d4; transition:background .15s,color .15s; }
+.wc button:hover { background:rgba(255,255,255,.1); color:#fff; } .wc button.close:hover { background:#e5484d; }
+.wc svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.2; }
+.panel { margin:6px 40px 34px; padding:26px 34px; border-radius:24px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(22px) saturate(1.4); box-shadow:0 24px 70px rgba(0,0,0,.45); display:grid; align-content:center; justify-items:center; gap:12px; text-align:center; }
+.panel > * { animation:rise .5s var(--ease) both; }
+.panel > :nth-child(2) { animation-delay:.05s } .panel > :nth-child(3) { animation-delay:.1s } .panel > :nth-child(4) { animation-delay:.15s } .panel > :nth-child(5) { animation-delay:.2s }
+@keyframes rise { from { opacity:0; transform:translateY(12px) scale(.98); filter:blur(4px); } }
+.logo { width:76px; height:76px; border-radius:20px; filter:drop-shadow(0 0 22px rgba(143,124,255,.65)); animation:float 4s ease-in-out infinite; }
+@keyframes float { 50% { transform:translateY(-6px); } }
+h1 { font-size:28px; letter-spacing:-.4px; background:linear-gradient(90deg,#fff,#c9bfff 60%,#8f7cff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.muted { color:var(--muted); } small.muted { font-size:12px; }
+.opt { display:flex; align-items:center; gap:10px; padding:8px 14px; border-radius:12px; background:var(--glass2); border:1px solid var(--line); }
+.switch { position:relative; width:42px; height:24px; border-radius:99px; background:rgba(160,150,255,.25); transition:background .25s; flex:none; }
+.switch::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .35s var(--spring); }
+.switch.on { background:var(--accent); box-shadow:0 0 14px rgba(143,124,255,.55); } .switch.on::after { transform:translateX(18px); }
+.btn { position:relative; overflow:hidden; padding:14px 46px; border-radius:15px; font-size:18px; font-weight:750; color:var(--ink); background:linear-gradient(135deg,#b3a7ff,#8f7cff 45%,#6f5cf2); box-shadow:0 8px 26px rgba(111,92,242,.45); transition:transform .15s var(--spring),filter .2s; animation:pulse 2.8s ease-in-out infinite; }
+.btn:hover { filter:brightness(1.08); transform:translateY(-2px); } .btn:active { transform:scale(.96); }
+.btn::after { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%); transform:translateX(-120%); }
+.btn:hover::after { transform:translateX(120%); transition:transform .7s var(--ease); }
+.btn.ghost { background:var(--glass2); color:var(--text); box-shadow:none; animation:none; border:1px solid var(--line); font-size:15px; padding:10px 24px; }
+@keyframes pulse { 50% { box-shadow:0 8px 36px rgba(143,124,255,.8),0 0 0 6px rgba(143,124,255,.12); } }
+.ripple { position:absolute; border-radius:50%; background:rgba(255,255,255,.4); transform:scale(0); animation:ripple .65s ease-out forwards; pointer-events:none; }
+@keyframes ripple { to { transform:scale(1); opacity:0; } }
+.steps { display:grid; gap:8px; width:100%; max-width:340px; text-align:left; }
+.step { display:flex; align-items:center; gap:12px; color:var(--muted); transition:color .3s; }
+.step .dot { width:22px; height:22px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center; flex:none; transition:all .3s var(--spring); }
+.step .dot svg { width:13px; height:13px; fill:none; stroke:var(--ink); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; opacity:0; }
+.step.active { color:var(--text); } .step.active .dot { border-color:var(--accent); border-top-color:transparent; animation:spin .8s linear infinite; }
+.step.done { color:var(--text); } .step.done .dot { background:var(--ok); border-color:var(--ok); } .step.done .dot svg { opacity:1; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.bar { width:100%; max-width:340px; height:8px; border-radius:8px; background:rgba(160,150,255,.18); overflow:hidden; }
+.bar i { display:block; width:0; height:100%; border-radius:8px; background:linear-gradient(90deg,#8f7cff,#c9bfff,#8f7cff); background-size:200% 100%; animation:flow 1.4s linear infinite; transition:width .5s var(--ease); }
+@keyframes flow { to { background-position:-200% 0; } }
+.tick { width:84px; height:84px; border-radius:50%; background:var(--ok); display:grid; place-items:center; box-shadow:0 0 40px rgba(102,224,168,.45); animation:pop .6s var(--spring) both; }
+.tick svg { width:44px; height:44px; fill:none; stroke:#0b2a1c; stroke-width:3.2; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:30; stroke-dashoffset:30; animation:draw .5s .3s ease-out forwards; }
+@keyframes pop { from { transform:scale(.4); opacity:0; } } @keyframes draw { to { stroke-dashoffset:0; } }
+.err { color:var(--danger); max-width:420px; }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; } }

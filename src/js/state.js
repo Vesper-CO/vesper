@@ -4,7 +4,7 @@ export const S = {
   view: 'home',
   instances: [],
   accounts: [],
-  settings: { theme: 'dark', default_ram_mb: 4096, ms_client_id: '', java_path: '', auto_update: true },
+  settings: { theme: 'dark', default_ram_mb: 4096, java_path: '', auto_update: true },
   versions: null,
   running: {}, // instance id -> stage text
   logs: {},    // instance id -> [{line, stream}]

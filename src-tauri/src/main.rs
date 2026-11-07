@@ -97,6 +97,7 @@ fn main() {
             auth::list_accounts,
             auth::set_active_account,
             auth::remove_account,
+            auth::refresh_profile,
             launch::play,
             launch::kill_game,
             launch::running_instances,

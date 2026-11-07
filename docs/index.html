@@ -48,7 +48,7 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 48px;colo
     <h1>A lighter way to play Minecraft.</h1>
     <p class="lead">Vesper is a small, fast launcher for Minecraft: Java Edition. Manage instances, install mods from Modrinth in one click, and launch Fabric, Quilt, Forge or NeoForge without fuss.</p>
     <div class="cta">
-      <a class="btn" id="dl" href="https://github.com/jakedev2/vesper/releases/latest/download/vesper.exe" download>Download for Windows</a>
+      <a class="btn" id="dl" href="https://github.com/jakedev2/vesper/releases/latest/download/Vesper-Setup.exe" download>Download for Windows</a>
       <a class="btn ghost" href="https://github.com/jakedev2/vesper/releases">All versions</a>
     </div>
     <p class="meta" id="meta">Windows 10 or 11, 64-bit. No admin rights needed.</p>
@@ -65,7 +65,7 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 48px;colo
 
   <h2>Install</h2>
   <ol>
-    <li>Download the Setup file and run it.</li>
+    <li>Download Vesper-Setup.exe and run it, then click <b>Install</b>.</li>
     <li>If Windows shows “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.</li>
     <li>Open Vesper, go to <b>Accounts</b>, and sign in with the Microsoft account that owns Minecraft: Java Edition.</li>
     <li>Create an instance and press <b>Play</b>. The first launch downloads the game and Java.</li>
@@ -83,7 +83,7 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 48px;colo
     const r = await fetch('https://api.github.com/repos/jakedev2/vesper/releases/latest');
     if (!r.ok) return;
     const rel = await r.json();
-    const exe = (rel.assets || []).find(a => /\.exe$/i.test(a.name));
+    const exe = (rel.assets || []).find(a => /^Vesper-Setup\.exe$/i.test(a.name));
     if (!exe) return;
     document.getElementById('dl').href = exe.browser_download_url;
     document.getElementById('meta').textContent =

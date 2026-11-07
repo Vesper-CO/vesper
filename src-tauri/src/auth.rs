@@ -5,7 +5,7 @@
 //!  - Passwords never touch Vesper: the user signs in on microsoft.com.
 //!  - Refresh/access tokens are encrypted with AES-256-GCM before they are written to disk.
 //!  - The AES key lives in the Windows Credential Manager (via the `keyring` crate), not on disk.
-use crate::{download::client, error::CmdResult, instances::now, paths, settings};
+use crate::{download::client, error::CmdResult, instances::now, paths};
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Key, Nonce,
@@ -34,6 +34,8 @@ struct Stored {
     uuid: String,
     name: String,
     enc: String,
+    #[serde(default)]
+    skin: String,
 }
 #[derive(Serialize, Deserialize, Default)]
 struct Store {
@@ -46,6 +48,7 @@ pub struct AccountInfo {
     uuid: String,
     name: String,
     active: bool,
+    skin: String,
 }
 pub struct Session {
     pub name: String,
@@ -113,25 +116,26 @@ async fn post_json(url: &str, body: &Value) -> Result<Value> {
 }
 
 /// Vesper's built-in Azure application (client) ID. This is a public identifier, not a secret.
-const DEFAULT_CLIENT_ID: &str = "c5249c24-698c-49e5-b047-eb7ae88913a4";
+const CLIENT_ID: &str = "c5249c24-698c-49e5-b047-eb7ae88913a4";
 
 fn client_id() -> Result<String> {
-    // Optional override from Settings (for developers using their own Azure app).
-    let s = settings::load().ms_client_id;
-    if !s.trim().is_empty() {
-        return Ok(s.trim().to_string());
-    }
-    if let Some(c) = option_env!("VESPER_MS_CLIENT_ID") {
-        if !c.is_empty() {
-            return Ok(c.to_string());
-        }
-    }
-    Ok(DEFAULT_CLIENT_ID.to_string())
+    Ok(CLIENT_ID.to_string())
+}
+
+/// The URL of the player's active skin texture (https), or empty.
+fn skin_of(profile: &Value) -> String {
+    profile["skins"]
+        .as_array()
+        .and_then(|a| a.iter().find(|s| s["state"] == "ACTIVE").or(a.first()))
+        .and_then(|s| s["url"].as_str())
+        .map(|u| u.replacen("http://", "https://", 1))
+        .unwrap_or_default()
 }
 
 // ---------- Xbox / Minecraft chain ----------
 
 struct Chain {
+    skin: String,
     name: String,
     uuid: String,
     mc_token: String,
@@ -169,6 +173,7 @@ async fn xbox_chain(ms_access: &str) -> Result<Chain> {
     }
     let prof: Value = prof.error_for_status()?.json().await?;
     Ok(Chain {
+        skin: skin_of(&prof),
         name: prof["name"].as_str().unwrap_or("Player").to_string(),
         uuid: prof["id"].as_str().ok_or_else(|| anyhow!("Profile has no id"))?.to_string(),
         mc_token: token,
@@ -243,10 +248,10 @@ pub async fn login_finish(device_code: String, interval: u64, expires_in: u64) -
         let mut store = load_store();
         let enc = seal(&Secret { refresh_token: refresh.into(), mc_token: c.mc_token, mc_expires: c.mc_expires })?;
         store.accounts.retain(|a| a.uuid != c.uuid);
-        store.accounts.push(Stored { uuid: c.uuid.clone(), name: c.name.clone(), enc });
+        store.accounts.push(Stored { uuid: c.uuid.clone(), name: c.name.clone(), enc, skin: c.skin.clone() });
         store.active = Some(c.uuid.clone());
         save_store(&store)?;
-        return Ok(AccountInfo { uuid: c.uuid, name: c.name, active: true });
+        return Ok(AccountInfo { uuid: c.uuid, name: c.name, active: true, skin: c.skin });
     }
 }
 
@@ -254,7 +259,7 @@ pub async fn login_finish(device_code: String, interval: u64, expires_in: u64) -
 pub fn list_accounts() -> Vec<AccountInfo> {
     let s = load_store();
     let active = s.active.clone().or_else(|| s.accounts.first().map(|a| a.uuid.clone()));
-    s.accounts.iter().map(|a| AccountInfo { uuid: a.uuid.clone(), name: a.name.clone(), active: Some(&a.uuid) == active.as_ref() }).collect()
+    s.accounts.iter().map(|a| AccountInfo { uuid: a.uuid.clone(), name: a.name.clone(), active: Some(&a.uuid) == active.as_ref(), skin: a.skin.clone() }).collect()
 }
 
 #[tauri::command]
@@ -295,9 +300,29 @@ pub async fn session() -> Result<Session> {
         sec.mc_token = c.mc_token;
         sec.mc_expires = c.mc_expires;
         name = c.name;
+        store.accounts[pos].skin = c.skin;
         store.accounts[pos].name = name.clone();
         store.accounts[pos].enc = seal(&sec)?;
         save_store(&store)?;
     }
+    // Older saved accounts have no skin yet: fetch it once.
+    if store.accounts[pos].skin.is_empty() {
+        if let Ok(r) = client().get("https://api.minecraftservices.com/minecraft/profile").bearer_auth(&sec.mc_token).send().await {
+            if let Ok(p) = r.json::<Value>().await {
+                let skin = skin_of(&p);
+                if !skin.is_empty() {
+                    store.accounts[pos].skin = skin;
+                    let _ = save_store(&store);
+                }
+            }
+        }
+    }
     Ok(Session { name, uuid: id, token: sec.mc_token })
+}
+
+/// Called at startup: refreshes the active account's tokens and skin if needed.
+#[tauri::command]
+pub async fn refresh_profile() -> CmdResult<()> {
+    session().await?;
+    Ok(())
 }

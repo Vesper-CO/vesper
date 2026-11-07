@@ -1,7 +1,7 @@
 import { appWindow, invoke, listen } from './api.js';
-import { S, loadAll } from './state.js';
+import { S, loadAll, refreshAccounts } from './state.js';
 import { $, toast, errMsg } from './util.js';
-import { buildNav, go, registerViews, showProgress, appendLog, syncPlayUI, promptUpdate } from './shell.js';
+import { buildNav, go, registerViews, showProgress, appendLog, syncPlayUI, promptUpdate, renderChip } from './shell.js';
 import { startBackground } from './background.js';
 import * as home from './views/home.js';
 import * as instances from './views/instances.js';
@@ -59,6 +59,8 @@ async function boot() {
   try { await loadAll(); } catch (e) { toast(errMsg(e), 'error'); }
   buildNav();
   go('home');
+  // Refresh tokens and fetch the real skin, then redraw the account chip.
+  invoke('refresh_profile').then(async () => { await refreshAccounts(); renderChip(); }).catch(() => {});
   if (S.settings.auto_update) {
     try {
       const info = await invoke('check_update');

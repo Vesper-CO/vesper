@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     pub theme: String,
     pub default_ram_mb: u32,
-    /// Application (client) ID of your Azure app registration - see README.
-    pub ms_client_id: String,
     /// Optional: use this java.exe instead of Mojang's runtime.
     pub java_path: String,
     pub auto_update: bool,
@@ -15,7 +13,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { theme: "dark".into(), default_ram_mb: 4096, ms_client_id: String::new(), java_path: String::new(), auto_update: true }
+        Self { theme: "dark".into(), default_ram_mb: 4096, java_path: String::new(), auto_update: true }
     }
 }
 

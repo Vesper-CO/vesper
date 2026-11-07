@@ -1,6 +1,6 @@
 import { invoke } from '../api.js';
 import { S, refreshAccounts } from '../state.js';
-import { $, esc, ask, modal, toast, errMsg } from '../util.js';
+import { $, esc, ask, modal, toast, errMsg, headHtml } from '../util.js';
 import { renderChip } from '../shell.js';
 
 export async function render(el) {
@@ -10,7 +10,7 @@ export async function render(el) {
     <div class="page-head"><div><h1>Accounts</h1><p class="muted">You sign in on Microsoft's own page. Vesper never sees your password.</p></div>
     <div class="actions"><button class="btn primary" id="add">Add account</button></div></div>
     ${S.accounts.length ? `<div class="grid">${S.accounts.map((a) => `<div class="card">
-      <div class="row" style="flex-wrap:nowrap"><img class="avatar" style="width:44px;height:44px" alt="" src="https://mc-heads.net/avatar/${a.uuid}/88">
+      <div class="row" style="flex-wrap:nowrap">${headHtml(a, 44)}
         <div class="grow"><h3>${esc(a.name)}</h3><small class="muted">${a.active ? 'Playing with this account' : 'Available'}</small></div></div>
       <div class="actions">${a.active ? '' : `<button class="btn sm" data-a="use" data-id="${a.uuid}">Use this account</button>`}<button class="btn sm danger" data-a="rm" data-id="${a.uuid}">Remove</button></div></div>`).join('')}</div>`
       : `<div class="empty"><b>No account yet</b><span>Add the Microsoft account that owns Minecraft: Java Edition.</span><button class="btn primary" id="add2">Add account</button></div>`}

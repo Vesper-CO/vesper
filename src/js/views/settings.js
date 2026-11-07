@@ -14,9 +14,6 @@ export async function render(el) {
       <label class="field"><span>Default memory for new instances: <b id="ramv">${ramLabel(s.default_ram_mb)}</b></span><input type="range" id="ram" min="1024" max="16384" step="512" value="${s.default_ram_mb}"></label>
       <label class="field"><span>Custom java.exe (optional)</span><input type="text" id="java" value="${esc(s.java_path)}" placeholder="Leave empty to use the Java that Mojang provides"></label>
     </div>
-    <h2>Microsoft sign-in (advanced)</h2>
-    <div class="card"><label class="field"><span>Custom Azure application (client) ID</span><input type="text" id="cid" value="${esc(s.ms_client_id)}" placeholder="Leave empty to use Vesper's built-in app"></label>
-      <p class="muted">Optional. Only fill this in to sign in through your own Azure app registration.</p></div>
     <h2>Updates</h2>
     <div class="card"><div class="row" style="justify-content:space-between"><span>Check for updates when Vesper starts</span><button class="switch ${s.auto_update ? 'on' : ''}" id="auto" role="switch" aria-checked="${s.auto_update}" aria-label="Check for updates on start"></button></div>
       <div class="row"><button class="btn" id="check">Check for updates</button><button class="btn" id="data">Open data folder</button></div></div>
@@ -27,7 +24,6 @@ export async function render(el) {
   $('#ram').oninput = (e) => { S.settings.default_ram_mb = +e.target.value; $('#ramv').textContent = ramLabel(+e.target.value); };
   $('#ram').onchange = save;
   $('#java').onchange = (e) => { S.settings.java_path = e.target.value; save(); };
-  $('#cid').onchange = (e) => { S.settings.ms_client_id = e.target.value.trim(); save(); };
   $('#auto').onclick = (e) => { S.settings.auto_update = !S.settings.auto_update; e.target.classList.toggle('on', S.settings.auto_update); e.target.setAttribute('aria-checked', S.settings.auto_update); save(); };
   $('#data').onclick = () => invoke('open_data_folder');
   $('#check').onclick = async () => {

@@ -1,7 +1,7 @@
 // App chrome: navigation, router, account chip, progress dock, console drawer and play helper.
 import { invoke } from './api.js';
 import { S, activeAccount } from './state.js';
-import { $, $$, esc, md, modal, ICON, toast, errMsg } from './util.js';
+import { $, $$, esc, md, modal, ICON, toast, errMsg, headHtml } from './util.js';
 
 const NAV = [['home', 'Home'], ['instances', 'Instances'], ['mods', 'Mod Library'], ['accounts', 'Accounts'], ['settings', 'Settings']];
 let views = {};
@@ -27,7 +27,7 @@ export async function go(view) {
 export function renderChip() {
   const a = activeAccount();
   $('#acct-chip').innerHTML = a
-    ? `<img class="avatar" alt="" src="https://mc-heads.net/avatar/${a.uuid}/64"><span class="meta"><b>${esc(a.name)}</b><small>Signed in</small></span>`
+    ? `${headHtml(a, 34)}<span class="meta"><b>${esc(a.name)}</b><small>Signed in</small></span>`
     : `<span class="avatar"></span><span class="meta"><b>Sign in</b><small>Microsoft account</small></span>`;
 }
 

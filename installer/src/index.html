@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vesper Setup</title>
+  <link rel="stylesheet" href="installer.css">
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="shell">
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="brand" data-tauri-drag-region><img src="assets/logo.svg" alt=""><span data-tauri-drag-region>Vesper Setup</span></div>
+      <div class="wc">
+        <button id="min" aria-label="Minimize"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
+        <button id="close" class="close" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+      </div>
+    </header>
+    <main class="panel" id="panel"></main>
+  </div>
+  <script type="module" src="installer.js"></script>
+</body>
+</html>

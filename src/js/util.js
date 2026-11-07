@@ -4,6 +4,10 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 export const errMsg = (e) => (typeof e === 'string' ? e : e?.message || JSON.stringify(e));
 export const fmtNum = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n ?? 0));
 export const ramLabel = (mb) => (mb % 1024 ? (mb / 1024).toFixed(1) : mb / 1024) + ' GB';
+/** Player head from the account's real skin (face + hat layer), pixel-perfect. Falls back to mc-heads. */
+export const headHtml = (a, size = 34) => a?.skin
+  ? `<span class="head" style="--s:${size}px;--skin:url('${esc(a.skin)}')"><i></i><i></i></span>`
+  : `<img class="avatar" style="width:${size}px;height:${size}px" alt="" src="https://mc-heads.net/avatar/${esc(a?.uuid || '')}/${size * 2}">`;
 export const LOADER_NAMES = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
 
 export function ago(ts) {
