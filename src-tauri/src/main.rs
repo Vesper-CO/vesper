@@ -49,7 +49,12 @@ async fn check_update(app: AppHandle) -> CmdResult<Option<UpdateInfo>> {
     if !app.state::<UpdaterReady>().0 {
         return Ok(None);
     }
-    Ok(app.updater()?.check().await?.map(|u| UpdateInfo { version: u.version, current: u.current_version, notes: u.body.unwrap_or_default() }))
+    match app.updater()?.check().await {
+        Ok(u) => Ok(u.map(|u| UpdateInfo { version: u.version, current: u.current_version, notes: u.body.unwrap_or_default() })),
+        // The latest release has no latest.json yet (for example a hand-made release): nothing to offer.
+        Err(tauri_plugin_updater::Error::ReleaseNotFound) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Download, install and restart into the new version.

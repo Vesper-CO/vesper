@@ -29,6 +29,10 @@ h1 { font-size:28px; letter-spacing:-.4px; background:linear-gradient(90deg,#fff
 .btn::after { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%); transform:translateX(-120%); }
 .btn:hover::after { transform:translateX(120%); transition:transform .7s var(--ease); }
 .btn.ghost { background:var(--glass2); color:var(--text); box-shadow:none; animation:none; border:1px solid var(--line); font-size:15px; padding:10px 24px; }
+.btn.red { background:linear-gradient(135deg,#ffa3ad,#ff6b7a 45%,#e5484d); color:#2a0b0f; box-shadow:0 8px 24px rgba(229,72,77,.4); animation:none; font-size:15px; padding:10px 28px; }
+.btn.link { background:none; box-shadow:none; animation:none; border:0; font-size:13px; padding:6px 12px; color:var(--muted); }
+.btn.link:hover { color:var(--danger); filter:none; }
+.btn.link::after { display:none; }
 @keyframes pulse { 50% { box-shadow:0 8px 36px rgba(143,124,255,.8),0 0 0 6px rgba(143,124,255,.12); } }
 .ripple { position:absolute; border-radius:50%; background:rgba(255,255,255,.4); transform:scale(0); animation:ripple .65s ease-out forwards; pointer-events:none; }
 @keyframes ripple { to { transform:scale(1); opacity:0; } }

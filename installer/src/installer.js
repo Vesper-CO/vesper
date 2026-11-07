@@ -26,37 +26,35 @@ async function welcome() {
     <h1>${existing ? 'Reinstall Vesper' : 'Install Vesper'}</h1>
     <p class="muted">A fast, small Minecraft launcher with Modrinth built in.<br>Installs just for you, with no admin rights needed.</p>
     <label class="opt"><button class="switch on" id="desk" role="switch" aria-checked="true" aria-label="Desktop shortcut"></button><span>Create a desktop shortcut</span></label>
-    <button class="btn" id="go">${existing ? 'Reinstall' : 'Install'}</button>`;
+    <button class="btn" id="go">${existing ? 'Reinstall' : 'Install'}</button>
+    ${existing ? '<button class="btn link" id="rm">Uninstall Vesper</button>' : ''}`;
   toggle($('#desk'), () => desktop, (v) => (desktop = v));
   $('#go').onclick = start;
+  if (existing) $('#rm').onclick = confirmUninstall;
 }
 
-const STEPS = [['prepare', 'Getting ready'], ['install', 'Installing Vesper'], ['shortcuts', 'Creating shortcuts']];
-const TARGET = { prepare: 10, install: 20, shortcuts: 92, done: 100 };
-let creep, pct = 0;
+const INSTALL_STEPS = [['prepare', 'Getting ready', 10], ['install', 'Installing Vesper', 20], ['shortcuts', 'Creating shortcuts', 92]];
+const REMOVE_STEPS = [['close', 'Closing Vesper', 15], ['remove', 'Removing files', 30]];
+let STEPS = INSTALL_STEPS, creep, pct = 0;
 const setPct = (p) => { pct = p; const i = $('.bar i'); if (i) i.style.width = p + '%'; };
 
-function installing() {
-  busy = true;
-  panel.innerHTML = `<img class="logo" src="assets/logo.svg" alt=""><h1>Installing</h1>
-    <div class="steps">${STEPS.map(([k, t]) => `<div class="step" id="s-${k}"><span class="dot">${CHECK}</span>${t}</div>`).join('')}</div>
+function busyView(title, steps) {
+  busy = true; STEPS = steps;
+  panel.innerHTML = `<img class="logo" src="assets/logo.svg" alt=""><h1>${title}</h1>
+    <div class="steps">${steps.map(([k, t]) => `<div class="step" id="s-${k}"><span class="dot">${CHECK}</span>${t}</div>`).join('')}</div>
     <div class="bar"><i></i></div><small class="muted">Please keep this window open.</small>`;
   setPct(2);
 }
 function setStep(step) {
-  const order = STEPS.map(([k]) => k);
-  order.forEach((k, i) => {
-    const el = $('#s-' + k); if (!el) return;
-    const cur = order.indexOf(step);
-    el.className = 'step ' + (step === 'done' || i < cur ? 'done' : i === cur ? 'active' : '');
-  });
-  setPct(TARGET[step] ?? pct);
+  const order = STEPS.map(([k]) => k), cur = order.indexOf(step);
+  order.forEach((k, i) => { const el = $('#s-' + k); if (el) el.className = 'step ' + (step === 'done' || i < cur ? 'done' : i === cur ? 'active' : ''); });
+  setPct(step === 'done' ? 100 : (STEPS[cur]?.[2] ?? pct));
   clearInterval(creep);
-  if (step === 'install') creep = setInterval(() => setPct(pct + (86 - pct) * 0.06), 500); // slowly fills while the real installer runs
+  if (step === 'install' || step === 'remove') creep = setInterval(() => setPct(pct + (88 - pct) * 0.06), 500); // slowly fills while the real work runs
 }
 
 async function start() {
-  installing();
+  busyView('Installing', INSTALL_STEPS);
   const off = await T.event.listen('stage', (e) => setStep(e.payload));
   try { exe = await invoke('install', { desktop }); setStep('done'); setTimeout(done, 600); }
   catch (e) { fail(e); }
@@ -78,6 +76,31 @@ function fail(e) {
   panel.innerHTML = `<h1>Something went wrong</h1><p class="err selectable">${esc(typeof e === 'string' ? e : e?.message || e)}</p>
     <div style="display:flex;gap:10px"><button class="btn ghost" id="x">Close</button><button class="btn" id="retry" style="font-size:15px;padding:10px 28px">Try again</button></div>`;
   $('#x').onclick = () => win.close(); $('#retry').onclick = welcome;
+}
+
+function confirmUninstall() {
+  let wipe = false;
+  panel.innerHTML = `<h1>Uninstall Vesper?</h1>
+    <p class="muted">This removes the launcher and its shortcuts.<br>Your instances, worlds and accounts are kept unless you turn the option below on.</p>
+    <label class="opt"><button class="switch" id="wipe" role="switch" aria-checked="false" aria-label="Also delete my game data"></button><span>Also delete my game data</span></label>
+    <div style="display:flex;gap:10px"><button class="btn ghost" id="no">Cancel</button><button class="btn red" id="yes">Uninstall</button></div>`;
+  toggle($('#wipe'), () => wipe, (v) => (wipe = v));
+  $('#no').onclick = welcome;
+  $('#yes').onclick = async () => {
+    busyView('Uninstalling', REMOVE_STEPS);
+    const off = await T.event.listen('stage', (e) => setStep(e.payload));
+    try { await invoke('uninstall', { removeData: wipe }); setStep('done'); setTimeout(removed, 600); }
+    catch (e) { fail(e); }
+    finally { off(); clearInterval(creep); }
+  };
+}
+
+function removed() {
+  busy = false;
+  panel.innerHTML = `<div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1>Vesper was removed</h1><p class="muted">Thanks for trying it. You can install it again any time.</p>
+    <div style="display:flex;gap:10px"><button class="btn ghost" id="x">Close</button><button class="btn" id="again" style="font-size:15px;padding:10px 28px">Install again</button></div>`;
+  $('#x').onclick = () => win.close(); $('#again').onclick = welcome;
 }
 
 welcome();

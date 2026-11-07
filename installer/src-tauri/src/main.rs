@@ -5,7 +5,7 @@
 //! uninstaller and update path are exactly the same as a normal Vesper install.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{path::{Path, PathBuf}, process::{Command, Stdio}};
+use std::{path::{Path, PathBuf}, process::{Command, Stdio}, time::Duration};
 use tauri::{AppHandle, Emitter};
 
 static PAYLOAD: &[u8] = include_bytes!("../payload/vesper-setup.exe");
@@ -105,6 +105,53 @@ async fn install(app: AppHandle, desktop: bool) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || run_install(&app, desktop)).await.map_err(|e| e.to_string())?
 }
 
+fn run_uninstall(app: &AppHandle, remove_data: bool) -> Result<(), String> {
+    let exe = installed_exe().ok_or("Vesper does not seem to be installed.")?;
+    let dir = exe.parent().ok_or("Could not find the install folder.")?.to_path_buf();
+
+    stage(app, "close");
+    if let Some(name) = exe.file_name() {
+        let _ = quiet(Command::new("taskkill")).args(["/F", "/IM"]).arg(name).status();
+    }
+
+    stage(app, "remove");
+    let un = dir.join("uninstall.exe");
+    if un.exists() {
+        let mut c = quiet(Command::new(&un));
+        c.arg("/S"); // silent; keeps your instances and worlds (they live in AppData\Roaming\Vesper)
+        c.spawn().map_err(|e| format!("Could not start the uninstaller: {e}"))?;
+        // NSIS uninstallers hand over to a temporary copy, so wait until the app is really gone.
+        for _ in 0..120 {
+            if !exe.exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        if exe.exists() {
+            return Err("The uninstaller did not finish. Try again, or remove Vesper in Windows Settings > Apps.".into());
+        }
+    } else {
+        std::fs::remove_dir_all(&dir).map_err(|e| format!("Could not remove Vesper: {e}"))?;
+    }
+
+    // Shortcuts (the uninstaller normally removes them; this catches the ones we made).
+    if let Some(d) = dirs::desktop_dir() {
+        let _ = std::fs::remove_file(d.join("Vesper.lnk"));
+    }
+    if let Some(d) = dirs::data_dir() {
+        let _ = std::fs::remove_file(d.join("Microsoft").join("Windows").join("Start Menu").join("Programs").join("Vesper.lnk"));
+        if remove_data {
+            let _ = std::fs::remove_dir_all(d.join("Vesper")); // instances, worlds, encrypted accounts
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn uninstall(app: AppHandle, remove_data: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || run_uninstall(&app, remove_data)).await.map_err(|e| e.to_string())?
+}
+
 /// Path of an existing Vesper install, so the UI can say "Reinstall".
 #[tauri::command]
 fn installed() -> Option<String> {
@@ -125,7 +172,7 @@ fn finish(app: AppHandle, launch: bool, exe: String) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![install, installed, finish])
+        .invoke_handler(tauri::generate_handler![install, installed, uninstall, finish])
         .run(tauri::generate_context!())
         .expect("Vesper Setup failed to start");
 }
