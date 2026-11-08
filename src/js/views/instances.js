@@ -41,7 +41,7 @@ export async function render(el) {
   syncPlayUI();
 }
 
-const RUST_NOTE = 'Rust runs Minecraft 26.3 natively, rewritten in Rust with no Java, so memory and Java settings do not apply. Mods come from Horizon's own library; resource packs and shaders from Modrinth. You need a graphics card with Vulkan or DirectX 12. The first launch downloads the Rust build and prepares the game from your own Minecraft account, which takes a few minutes.';
+const RUST_NOTE = 'Rust runs Minecraft 26.3 natively, rewritten in Rust with no Java, so memory and Java settings do not apply. Mods come from the Horizon library; resource packs and shaders from Modrinth. You need a graphics card with Vulkan or DirectX 12. The first launch downloads the Rust build and prepares the game from your own Minecraft account, which takes a few minutes.';
 const typeOf = (v) => (v.type === 'release' ? 'release' : v.type === 'snapshot' ? 'snapshot' : 'old');
 
 async function form(inst, done) {
