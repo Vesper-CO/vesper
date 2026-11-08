@@ -1,13 +1,22 @@
-
 name: Release
 
+# Push a tag such as v0.3.0 (the same version as in src-tauri/tauri.conf.json), or run it by hand on a tag
+# that already exists to fill in a release that is missing files.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish, for example v0.3.0'
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   windows:
@@ -15,6 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -28,46 +39,52 @@ jobs:
             src-tauri -> target
             installer/src-tauri -> target
 
+      - name: Check the update signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::The TAURI_SIGNING_PRIVATE_KEY secret is empty. Add it under Settings > Secrets and variables > Actions: the full text of your vesper.key file. Without it no update can be signed, so there is no latest.json."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm install
 
-      - name: Build Vesper and create release
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Vesper (signed installer)
+        run: npx tauri build
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Vesper ${{ github.ref_name }}'
-          releaseBody: 'Download the Setup.exe below. Existing installs update themselves.'
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: true
+
+      - name: Write latest.json
+        shell: bash
+        run: node scripts/make-latest-json.mjs "$TAG" "${{ github.repository }}" "Vesper $TAG" | tee latest.log
 
       - name: Build Vesper-Setup.exe
         shell: pwsh
         run: |
           $nsis = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
-
-          if (-not $nsis) {
-            throw "NSIS installer not found!"
-          }
-
+          if (-not $nsis) { throw "NSIS installer not found!" }
           New-Item -ItemType Directory -Force installer/src-tauri/payload | Out-Null
-
           Copy-Item $nsis.FullName installer/src-tauri/payload/vesper-setup.exe
-
           Push-Location installer
           npm install
           npx tauri build --no-bundle
           Pop-Location
-
           Copy-Item installer/src-tauri/target/release/vesper-setup.exe Vesper-Setup.exe
 
-      - name: Attach Vesper-Setup.exe to release
-        shell: pwsh
+      - name: Publish the release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" Vesper-Setup.exe --clobber
+          IFS='|' read -r exe sig json < <(grep '^FILES=' latest.log | cut -d= -f2-)
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Vesper $TAG" --notes "Download Vesper-Setup.exe below. Existing installs update themselves."
+          fi
+          gh release upload "$TAG" "$exe" "$sig" "$json" Vesper-Setup.exe --clobber
+          echo "Release assets:"
+          gh release view "$TAG" --json assets --jq '.assets[].name'
+          gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx latest.json

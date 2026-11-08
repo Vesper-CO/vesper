@@ -3,6 +3,7 @@
 mod auth;
 mod download;
 mod error;
+mod horizon_mods;
 mod instances;
 mod launch;
 mod loaders;
@@ -107,6 +108,13 @@ fn main() {
             launch::play,
             launch::kill_game,
             launch::running_instances,
+            horizon_mods::horizon_search,
+            horizon_mods::horizon_project,
+            horizon_mods::horizon_install,
+            horizon_mods::horizon_installed,
+            horizon_mods::horizon_toggle,
+            horizon_mods::horizon_remove,
+            horizon_mods::horizon_update_all,
             modrinth::modrinth_categories,
             modrinth::modrinth_search,
             modrinth::modrinth_project,

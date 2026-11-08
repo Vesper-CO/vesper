@@ -25,7 +25,7 @@ export async function render(el) {
         <button class="icon-btn" data-a="del" data-id="${i.id}" title="Delete">${ICON.trash}</button></div></div>
       <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span>${i.loader === 'rust' ? '<span class="chip">No Java</span>' : `<span class="chip">${ramLabel(i.ram_mb)}</span>`}</div>
       <small class="muted">${ago(i.last_played)}</small>
-      <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button>${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button>`}</div>
+      <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button><button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button></div>
     </div>`).join('');
   grid.onclick = async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
@@ -41,7 +41,7 @@ export async function render(el) {
   syncPlayUI();
 }
 
-const RUST_NOTE = 'Rust runs Minecraft 26.3 natively, rewritten in Rust with no Java, so memory and Java settings do not apply. Mods are off for now. You need a graphics card with Vulkan or DirectX 12. The first launch downloads the Rust build and prepares the game from your own Minecraft account, which takes a few minutes.';
+const RUST_NOTE = 'Rust runs Minecraft 26.3 natively, rewritten in Rust with no Java, so memory and Java settings do not apply. Mods come from Horizon's own library; resource packs and shaders from Modrinth. You need a graphics card with Vulkan or DirectX 12. The first launch downloads the Rust build and prepares the game from your own Minecraft account, which takes a few minutes.';
 const typeOf = (v) => (v.type === 'release' ? 'release' : v.type === 'snapshot' ? 'snapshot' : 'old');
 
 async function form(inst, done) {

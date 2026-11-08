@@ -31,7 +31,8 @@ const HORIZON_BASE: &str = "https://github.com/horizon-rust/horizon/releases/dow
 const API_RELEASE: &str = "https://api.github.com/repos/horizon-rust/horizon/releases/tags/nightly";
 /// Horizon's release-signing key (crates/horizon-release-sign/release-keys.txt in its repository).
 const HORIZON_KEY: &str = "MU4oiIQcCxkZvbwSjjXs7SySCuM6ywRQ3nGaJYZG0gw=";
-const RECHECK_SECS: u64 = 12 * 3600;
+/// How often Play looks for a newer Vesper build (two tiny files; the zip is only downloaded when it changed).
+const RECHECK_SECS: u64 = 10 * 60;
 
 struct Source {
     base: &'static str,
@@ -270,9 +271,7 @@ pub async fn ensure_build(app: &AppHandle) -> Result<Build> {
     let st = load_state();
     let have = (!st.build.is_empty() && client_exe(&build_dir(&st.build)).exists()).then(|| st.build.clone());
     if let Some(id) = &have {
-        // A Horizon fallback build is rechecked after 10 minutes so Vesper's build replaces it quickly.
-        let wait = if st.vesper || VESPER_KEY.is_empty() { RECHECK_SECS } else { 600 };
-        if now().saturating_sub(st.checked) < wait {
+        if now().saturating_sub(st.checked) < RECHECK_SECS {
             return Ok(Build { id: id.clone(), dir: build_dir(id) });
         }
     }

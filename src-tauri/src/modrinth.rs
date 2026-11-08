@@ -109,7 +109,12 @@ pub async fn modrinth_versions(id: String) -> CmdResult<Vec<Value>> {
 
 async fn pick_version(pid: &str, inst: &Instance, kind: &str) -> Result<Value> {
     let loaders = if kind == "mod" { loaders_for(inst) } else { vec![] };
-    let vs = list_versions(pid, loaders, Some(&inst.mc_version)).await?;
+    let mut vs = list_versions(pid, loaders, Some(&inst.mc_version)).await?;
+    // Horizon reads resource packs and shader packs made for older versions too (resource packs load
+    // with vanilla's "made for an older version" notice), so a Rust instance falls back to the newest.
+    if vs.is_empty() && inst.loader == "rust" && kind != "mod" {
+        vs = list_versions(pid, vec![], None).await?;
+    }
     vs.iter().find(|v| v["version_type"] == "release").or(vs.first()).cloned().ok_or_else(|| anyhow!("No version of this project works with {} {}", inst.loader, inst.mc_version))
 }
 
@@ -147,8 +152,8 @@ fn install_inner<'a>(app: &'a AppHandle, inst: &'a Instance, pid: String, versio
         if kind == "modpack" {
             bail!("Modpacks are installed as new instances");
         }
-        if inst.loader == "rust" {
-            bail!("Mods are not available for Rust instances yet.");
+        if inst.loader == "rust" && kind == "mod" {
+            bail!("Rust instances use Horizon's own mod library, not Modrinth's Java mods.");
         }
         if kind == "mod" && inst.loader == "vanilla" {
             bail!("Mods need a loader. Edit this instance and pick Fabric, Quilt, Forge or NeoForge.");
@@ -272,18 +277,21 @@ pub fn modrinth_remove(instance_id: String, kind: String, filename: String) -> C
 #[tauri::command]
 pub async fn modrinth_update_all(app: AppHandle, instance_id: String) -> CmdResult<usize> {
     let inst = instances::load(&instance_id)?;
-    if inst.loader == "rust" {
-        return Err(anyhow!("Mods are not available for Rust instances yet.").into());
-    }
     let items: Vec<Item> = read_items(&instance_id).into_iter().filter(|i| !i.sha1.is_empty()).collect();
     let mut updated = 0;
     for kind in ["mod", "resourcepack", "shader"] {
+        if inst.loader == "rust" && kind == "mod" {
+            continue; // Rust mods come from Horizon's library and update through it
+        }
         let group: Vec<&Item> = items.iter().filter(|i| i.kind == kind).collect();
         if group.is_empty() {
             continue;
         }
         let hashes: Vec<&str> = group.iter().map(|i| i.sha1.as_str()).collect();
-        let mut body = json!({"hashes": hashes, "algorithm": "sha1", "game_versions": [inst.mc_version]});
+        let mut body = json!({"hashes": hashes, "algorithm": "sha1"});
+        if inst.loader != "rust" {
+            body["game_versions"] = json!([inst.mc_version]);
+        }
         let loaders = loaders_for(&inst);
         if kind == "mod" && !loaders.is_empty() {
             body["loaders"] = json!(loaders);
