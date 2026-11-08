@@ -25,7 +25,8 @@ const VESPER_BASE: &str = "https://github.com/Vesper-CO/vesper-rust/releases/lat
 const VESPER_ARCHIVE: &str = "vesper-rust-windows-x64.zip";
 /// Raw Ed25519 public key (base64) that signs Vesper's builds. Paste yours here (see vesper-rust/README.md);
 /// while it is empty, Vesper only uses the official Horizon build below.
-const VESPER_KEY: &str = "3Hjopxi2FoT1ipLAAfNoN91ZGKY3uRrpicNU3YEUwPs=";
+const VESPER_KEY: &str = "dc:78:e8:a7:18:b6:16:84:f5:8a:92:c0:01:f3:68:37:
+    dd:59:18:a6:37:b9:1a:e9:89:c3:54:dd:81:14:c0:fb";
 /// The official Horizon build, used until a Vesper build exists.
 const HORIZON_BASE: &str = "https://github.com/horizon-rust/horizon/releases/download/nightly";
 const API_RELEASE: &str = "https://api.github.com/repos/horizon-rust/horizon/releases/tags/nightly";
