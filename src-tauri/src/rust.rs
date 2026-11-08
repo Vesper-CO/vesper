@@ -23,10 +23,9 @@ pub const MC_VERSION: &str = "26.3";
 /// Vesper's own build of the Rust client (rebranded; made by the `vesper-rust` repository's workflow).
 const VESPER_BASE: &str = "https://github.com/Vesper-CO/vesper-rust/releases/latest/download";
 const VESPER_ARCHIVE: &str = "vesper-rust-windows-x64.zip";
-/// Raw Ed25519 public key (base64) that signs Vesper's builds. Paste yours here (see vesper-rust/README.md);
+/// Raw Ed25519 public key, BASE64 (32 bytes -> 44 characters ending in `=`), one line, no colons or spaces.
 /// while it is empty, Vesper only uses the official Horizon build below.
-const VESPER_KEY: &str = "dc:78:e8:a7:18:b6:16:84:f5:8a:92:c0:01:f3:68:37:
-    dd:59:18:a6:37:b9:1a:e9:89:c3:54:dd:81:14:c0:fb";
+const VESPER_KEY: &str = "3Hjopxi2FoT1ipLAAfNoN91ZGKY3uRrpicNU3YEUwPs=";
 /// The official Horizon build, used until a Vesper build exists.
 const HORIZON_BASE: &str = "https://github.com/horizon-rust/horizon/releases/download/nightly";
 const API_RELEASE: &str = "https://api.github.com/repos/horizon-rust/horizon/releases/tags/nightly";
@@ -53,6 +52,9 @@ fn sources() -> Vec<Source> {
 struct State {
     build: String,
     checked: u64,
+    /// True when the installed build is Vesper's own (not the Horizon fallback).
+    #[serde(default)]
+    vesper: bool,
 }
 fn state_path() -> PathBuf { paths::rust().join("state.json") }
 fn load_state() -> State {
@@ -200,7 +202,7 @@ fn extract(zip_path: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn fetch_from(app: &AppHandle, src: &Source) -> Result<String> {
+async fn fetch_from(app: &AppHandle, src: &Source) -> Result<(String, bool)> {
     let (base, name) = (src.base, src.archive);
     let sums = http_bytes(&format!("{base}/SHA256SUMS")).await.context("Could not reach the Rust build's releases")?;
     let sig = http_bytes(&format!("{base}/SHA256SUMS.sig")).await.ok().and_then(|b| String::from_utf8(b).ok());
@@ -216,7 +218,7 @@ async fn fetch_from(app: &AppHandle, src: &Source) -> Result<String> {
     let id = digest[..12].to_string();
     let dir = build_dir(&id);
     if client_exe(&dir).exists() {
-        return Ok(id);
+        return Ok((id, src.vesper));
     }
     let zip = paths::rust().join("tmp").join(name);
     let _ = tokio::fs::remove_file(&zip).await;
@@ -232,15 +234,15 @@ async fn fetch_from(app: &AppHandle, src: &Source) -> Result<String> {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::rename(&partial, &dir)?;
     let _ = std::fs::remove_file(&zip);
-    Ok(id)
+    Ok((id, src.vesper))
 }
 
 /// Try Vesper's own build first, then the official one.
-async fn fetch_latest(app: &AppHandle) -> Result<String> {
+async fn fetch_latest(app: &AppHandle) -> Result<(String, bool)> {
     let mut last = anyhow!("No Rust build source is available");
     for src in sources() {
         match fetch_from(app, &src).await {
-            Ok(id) => return Ok(id),
+            Ok(r) => return Ok(r),
             Err(e) => last = e,
         }
     }
@@ -268,13 +270,15 @@ pub async fn ensure_build(app: &AppHandle) -> Result<Build> {
     let st = load_state();
     let have = (!st.build.is_empty() && client_exe(&build_dir(&st.build)).exists()).then(|| st.build.clone());
     if let Some(id) = &have {
-        if now().saturating_sub(st.checked) < RECHECK_SECS {
+        // A Horizon fallback build is rechecked after 10 minutes so Vesper's build replaces it quickly.
+        let wait = if st.vesper || VESPER_KEY.is_empty() { RECHECK_SECS } else { 600 };
+        if now().saturating_sub(st.checked) < wait {
             return Ok(Build { id: id.clone(), dir: build_dir(id) });
         }
     }
     match fetch_latest(app).await {
-        Ok(id) => {
-            save_state(&State { build: id.clone(), checked: now() });
+        Ok((id, vesper)) => {
+            save_state(&State { build: id.clone(), checked: now(), vesper });
             prune(&id);
             Ok(Build { dir: build_dir(&id), id })
         }
