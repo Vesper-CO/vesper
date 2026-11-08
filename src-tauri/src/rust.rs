@@ -21,11 +21,11 @@ use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, proce
 pub const MC_VERSION: &str = "26.3";
 
 /// Vesper's own build of the Rust client (rebranded; made by the `vesper-rust` repository's workflow).
-const VESPER_BASE: &str = "https://github.com/Vesper-CO/vesper/releases/download/rust-latest";
+const VESPER_BASE: &str = "https://github.com/Vesper-CO/vesper-rust/releases/latest/download";
 const VESPER_ARCHIVE: &str = "vesper-rust-windows-x64.zip";
 /// Raw Ed25519 public key (base64) that signs Vesper's builds. Paste yours here (see vesper-rust/README.md);
 /// while it is empty, Vesper only uses the official Horizon build below.
-const VESPER_KEY: &str = "";
+const VESPER_KEY: &str = "3Hjopxi2FoT1ipLAAfNoN91ZGKY3uRrpicNU3YEUwPs=";
 /// The official Horizon build, used until a Vesper build exists.
 const HORIZON_BASE: &str = "https://github.com/horizon-rust/horizon/releases/download/nightly";
 const API_RELEASE: &str = "https://api.github.com/repos/horizon-rust/horizon/releases/tags/nightly";
