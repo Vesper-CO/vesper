@@ -11,7 +11,7 @@ A small, fast Minecraft: Java Edition launcher for Windows. Tauri (Rust + web UI
 
 ## Rust mode
 
-Besides Java, Vesper can run **Minecraft rewritten in Rust**: pick **Rust** as the loader when you create an instance. It is built from the open-source [Horizon](https://github.com/horizon-rust/horizon) project (MIT license, Copyright (c) 2026 Ludovic Marie and the Horizon contributors), renamed to Vesper by the [vesper-rust](https://github.com/jakedev2/vesper-rust) build repository.
+Besides Java, Vesper can run **Minecraft rewritten in Rust**: pick **Rust** as the loader when you create an instance. It is built from the open-source [Horizon](https://github.com/horizon-rust/horizon) project (MIT license, Copyright (c) 2026 Ludovic Marie and the Horizon contributors), renamed to Vesper by the [vesper-rust](https://github.com/Vesper-CO/vesper-rust) build repository.
 
 - Vesper bundles none of it. On first Play it downloads the signed build from GitHub and checks its checksum before installing.
 - Nothing is sent to Horizon's servers: the "playing now" ping, the cosmetics service and Discord presence are switched off.
