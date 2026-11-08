@@ -1,6 +1,6 @@
 [package]
 name = "vesper-setup"
-version = "0.1.3"
+version = "0.1.1"
 description = "Vesper installer"
 edition = "2021"
 

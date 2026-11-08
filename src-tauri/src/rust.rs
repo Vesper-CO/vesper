@@ -2,7 +2,7 @@
 //! github.com/horizon-rust/horizon), run instead of Java.
 //!
 //! Vesper does not bundle Horizon or any Minecraft file. On first Play it:
-//!  1. downloads Horizon's official `nightly` build and checks its Ed25519-signed SHA-256,
+//!  1. downloads Vesper's rebranded build (or, until one exists, Horizon's official `nightly`) and checks its Ed25519-signed SHA-256,
 //!  2. fetches the player's own Minecraft files from Mojang (only for a signed-in owner),
 //!  3. runs `horizon-prepare`, which builds the game's resources from those files,
 //!  4. starts `horizon-client`, handing over the Microsoft session on stdin (Horizon's Launch API).
@@ -20,14 +20,32 @@ use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, proce
 /// The Minecraft version Horizon is built for. Updated from the build itself on first Play.
 pub const MC_VERSION: &str = "26.3";
 
-const BASE: &str = "https://github.com/horizon-rust/horizon/releases/download/nightly";
+/// Vesper's own build of the Rust client (rebranded; made by the `vesper-rust` repository's workflow).
+const VESPER_BASE: &str = "https://github.com/Vesper-CO/vesper/releases/download/rust-latest";
+const VESPER_ARCHIVE: &str = "vesper-rust-windows-x64.zip";
+/// Raw Ed25519 public key (base64) that signs Vesper's builds. Paste yours here (see vesper-rust/README.md);
+/// while it is empty, Vesper only uses the official Horizon build below.
+const VESPER_KEY: &str = "";
+/// The official Horizon build, used until a Vesper build exists.
+const HORIZON_BASE: &str = "https://github.com/horizon-rust/horizon/releases/download/nightly";
 const API_RELEASE: &str = "https://api.github.com/repos/horizon-rust/horizon/releases/tags/nightly";
 /// Horizon's release-signing key (crates/horizon-release-sign/release-keys.txt in its repository).
-const RELEASE_KEY: &str = "MU4oiIQcCxkZvbwSjjXs7SySCuM6ywRQ3nGaJYZG0gw=";
+const HORIZON_KEY: &str = "MU4oiIQcCxkZvbwSjjXs7SySCuM6ywRQ3nGaJYZG0gw=";
 const RECHECK_SECS: u64 = 12 * 3600;
 
-fn archive_name() -> &'static str {
-    if cfg!(target_arch = "aarch64") { "horizon-windows-arm64.zip" } else { "horizon-windows-x64.zip" }
+struct Source {
+    base: &'static str,
+    archive: &'static str,
+    vesper: bool,
+}
+fn sources() -> Vec<Source> {
+    let mut v = vec![];
+    if !VESPER_KEY.is_empty() && cfg!(not(target_arch = "aarch64")) {
+        v.push(Source { base: VESPER_BASE, archive: VESPER_ARCHIVE, vesper: true });
+    }
+    let archive = if cfg!(target_arch = "aarch64") { "horizon-windows-arm64.zip" } else { "horizon-windows-x64.zip" };
+    v.push(Source { base: HORIZON_BASE, archive, vesper: false });
+    v
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -51,11 +69,18 @@ pub struct Build {
     pub dir: PathBuf,
 }
 fn build_dir(id: &str) -> PathBuf { paths::rust().join("builds").join(id) }
-fn client_exe(dir: &Path) -> PathBuf { dir.join("horizon-client.exe") }
+/// Vesper's build names its program vesper-client.exe; the official one is horizon-client.exe.
+fn client_exe(dir: &Path) -> PathBuf {
+    let v = dir.join("vesper-client.exe");
+    if v.exists() { v } else { dir.join("horizon-client.exe") }
+}
 fn prepare_exe(dir: &Path) -> PathBuf { dir.join("horizon-prepare.exe") }
 
 fn command(program: &Path) -> Command {
     let mut c = Command::new(program);
+    // Vesper does not send anything to Horizon's servers: no "playing now" ping, no cosmetics
+    // service, no Discord presence.
+    c.env("HORIZON_TELEMETRY_URL", "off").env("HORIZON_NO_HEARTBEAT", "1").env("HORIZON_COSMETICS", "0").env("HORIZON_NO_DISCORD", "1");
     #[cfg(windows)]
     c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     c.kill_on_drop(true);
@@ -76,8 +101,8 @@ fn title_version(title: &str) -> Option<String> {
     (date_ok && commit_ok).then(|| format!("nightly-{date}-{commit}"))
 }
 
-fn signed(key: &VerifyingKey, tag: &str, sums: &[u8], signatures: &str) -> bool {
-    let mut msg = format!("horizon release {tag}\n").into_bytes();
+fn signed(key: &VerifyingKey, message: &str, sums: &[u8], signatures: &str) -> bool {
+    let mut msg = message.as_bytes().to_vec();
     msg.extend_from_slice(sums);
     signatures
         .lines()
@@ -86,17 +111,32 @@ fn signed(key: &VerifyingKey, tag: &str, sums: &[u8], signatures: &str) -> bool 
         .any(|s| key.verify(&msg, &s).is_ok())
 }
 
-fn verify_release(sums: &[u8], v1: Option<&str>, v2: Option<&str>, title: Option<&str>) -> Result<()> {
-    let raw = B64.decode(RELEASE_KEY)?;
-    let key = VerifyingKey::from_bytes(&raw.try_into().map_err(|_| anyhow!("Bad built-in release key"))?)?;
+fn key_from(b64: &str) -> Result<VerifyingKey> {
+    let raw = B64.decode(b64)?;
+    Ok(VerifyingKey::from_bytes(&raw.try_into().map_err(|_| anyhow!("Bad built-in release key"))?)?)
+}
+
+/// Vesper's own builds: one signature over a fixed channel line and the checksums.
+fn verify_vesper(sums: &[u8], sig: Option<&str>) -> Result<()> {
+    let key = key_from(VESPER_KEY)?;
+    if let Some(sig) = sig {
+        if signed(&key, "vesper rust release\n", sums, sig) {
+            return Ok(());
+        }
+    }
+    bail!("The Vesper Rust build's signature did not match, so it was not installed.")
+}
+
+fn verify_horizon(sums: &[u8], v1: Option<&str>, v2: Option<&str>, title: Option<&str>) -> Result<()> {
+    let key = key_from(HORIZON_KEY)?;
     if let (Some(sig), Some(version)) = (v2, title.and_then(title_version)) {
-        if signed(&key, &version, sums, sig) {
+        if signed(&key, &format!("horizon release {version}\n"), sums, sig) {
             return Ok(());
         }
     }
     // Older channel signature, which Horizon still publishes beside the per-build one.
     if let Some(sig) = v1 {
-        if signed(&key, "nightly", sums, sig) {
+        if signed(&key, "horizon release nightly\n", sums, sig) {
             return Ok(());
         }
     }
@@ -159,13 +199,17 @@ fn extract(zip_path: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn fetch_latest(app: &AppHandle) -> Result<String> {
-    let name = archive_name();
-    let sums = http_bytes(&format!("{BASE}/SHA256SUMS")).await.context("Could not reach Horizon's releases")?;
-    let v1 = http_bytes(&format!("{BASE}/SHA256SUMS.sig")).await.ok().and_then(|b| String::from_utf8(b).ok());
-    let v2 = http_bytes(&format!("{BASE}/SHA256SUMS.v2.sig")).await.ok().and_then(|b| String::from_utf8(b).ok());
-    let title = get_json::<Value>(API_RELEASE).await.ok().and_then(|v| v["name"].as_str().map(String::from));
-    verify_release(&sums, v1.as_deref(), v2.as_deref(), title.as_deref())?;
+async fn fetch_from(app: &AppHandle, src: &Source) -> Result<String> {
+    let (base, name) = (src.base, src.archive);
+    let sums = http_bytes(&format!("{base}/SHA256SUMS")).await.context("Could not reach the Rust build's releases")?;
+    let sig = http_bytes(&format!("{base}/SHA256SUMS.sig")).await.ok().and_then(|b| String::from_utf8(b).ok());
+    if src.vesper {
+        verify_vesper(&sums, sig.as_deref())?;
+    } else {
+        let v2 = http_bytes(&format!("{base}/SHA256SUMS.v2.sig")).await.ok().and_then(|b| String::from_utf8(b).ok());
+        let title = get_json::<Value>(API_RELEASE).await.ok().and_then(|v| v["name"].as_str().map(String::from));
+        verify_horizon(&sums, sig.as_deref(), v2.as_deref(), title.as_deref())?;
+    }
 
     let digest = digest_for(&sums, name)?;
     let id = digest[..12].to_string();
@@ -176,7 +220,7 @@ async fn fetch_latest(app: &AppHandle) -> Result<String> {
     let zip = paths::rust().join("tmp").join(name);
     let _ = tokio::fs::remove_file(&zip).await;
     let _ = tokio::fs::remove_file(format!("{}.part", zip.display())).await;
-    download_all(app, "Downloading the Rust build", vec![Job { url: format!("{BASE}/{name}"), path: zip.clone(), sha1: None, size: None }]).await?;
+    download_all(app, "Downloading the Rust build", vec![Job { url: format!("{base}/{name}"), path: zip.clone(), sha1: None, size: None }]).await?;
     if sha256_file(&zip).await? != digest {
         let _ = tokio::fs::remove_file(&zip).await;
         bail!("The downloaded Rust build did not match its signed checksum, so it was not installed.");
@@ -188,6 +232,18 @@ async fn fetch_latest(app: &AppHandle) -> Result<String> {
     std::fs::rename(&partial, &dir)?;
     let _ = std::fs::remove_file(&zip);
     Ok(id)
+}
+
+/// Try Vesper's own build first, then the official one.
+async fn fetch_latest(app: &AppHandle) -> Result<String> {
+    let mut last = anyhow!("No Rust build source is available");
+    for src in sources() {
+        match fetch_from(app, &src).await {
+            Ok(id) => return Ok(id),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
 }
 
 /// Keep the current build and the previous one; remove the rest (and their prepared files).

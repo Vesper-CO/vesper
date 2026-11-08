@@ -1,0 +1,93 @@
+name: Build Vesper Rust client
+
+# Takes Horizon's newest official nightly, renames the client to Vesper (rebrand.py), builds it,
+# and publishes a signed zip that Vesper downloads. Runs every Monday and on demand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 21 * * 1'
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM: https://github.com/horizon-rust/horizon/releases/download/nightly
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Download Horizon's nightly (source and build) and check its checksums
+        shell: bash
+        run: |
+          curl -fsSL -o horizon-source.tar.gz "$UPSTREAM/horizon-source.tar.gz"
+          curl -fsSL -o horizon-windows-x64.zip "$UPSTREAM/horizon-windows-x64.zip"
+          curl -fsSL -o UPSTREAM_SUMS "$UPSTREAM/SHA256SUMS"
+          grep -E '(horizon-source\.tar\.gz|horizon-windows-x64\.zip)$' UPSTREAM_SUMS | sha256sum -c -
+
+      - name: Unpack and rebrand the source
+        shell: bash
+        run: |
+          mkdir src
+          tar -xzf horizon-source.tar.gz -C src --strip-components=1
+          cp assets/vesper.ico src/packaging/icons/horizon.ico
+          python rebrand.py src
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      - name: Build the client
+        shell: bash
+        working-directory: src
+        run: cargo build --release --locked -p horizon-client --bin horizon-client
+
+      - name: Package
+        shell: bash
+        run: |
+          7z x -opkg horizon-windows-x64.zip > /dev/null
+          dir=$(ls pkg | head -1)
+          cp src/target/release/horizon-client.exe "pkg/$dir/vesper-client.exe"
+          rm -f "pkg/$dir/horizon-client.exe"
+          cp LICENSE-HORIZON NOTICE.md "pkg/$dir/"
+          mkdir -p out
+          (cd pkg && 7z a -tzip ../out/vesper-rust-windows-x64.zip "$dir" > /dev/null)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vesper-rust
+          path: out/vesper-rust-windows-x64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vesper-rust
+
+      - name: Checksums and signature
+        env:
+          RUST_SIGNING_KEY: ${{ secrets.RUST_SIGNING_KEY }}
+        run: |
+          sha256sum vesper-rust-windows-x64.zip > SHA256SUMS
+          printf 'vesper rust release\n' > msg.bin
+          cat SHA256SUMS >> msg.bin
+          printf '%s\n' "$RUST_SIGNING_KEY" > key.pem
+          openssl pkeyutl -sign -rawin -inkey key.pem -in msg.bin -out sig.bin
+          base64 -w0 sig.bin > SHA256SUMS.sig
+          rm -f key.pem sig.bin msg.bin
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "rust-$(date -u +%Y%m%d)-${{ github.run_number }}" \
+            vesper-rust-windows-x64.zip SHA256SUMS SHA256SUMS.sig \
+            --repo "${{ github.repository }}" \
+            --title "Vesper Rust client $(date -u +%Y-%m-%d)" \
+            --notes "Built from Horizon's nightly of the same day. Vesper downloads this automatically."
