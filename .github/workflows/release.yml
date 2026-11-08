@@ -1,7 +1,10 @@
+
 name: Release
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -9,17 +12,27 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with:
+          node-version: 20
+
       - uses: dtolnay/rust-toolchain@stable
+
       - uses: Swatinem/rust-cache@v2
-        with: { workspaces: |
+        with:
+          workspaces: |
             src-tauri -> target
-            installer/src-tauri -> target }
-      - run: npm install
-      - uses: tauri-apps/tauri-action@v0
+            installer/src-tauri -> target
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Vesper and create release
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -28,23 +41,33 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Vesper ${{ github.ref_name }}'
           releaseBody: 'Download the Setup.exe below. Existing installs update themselves.'
+          releaseDraft: false
+          prerelease: false
           includeUpdaterJson: true
 
-      # The branded installer wraps the NSIS setup above (which the in-app updater also uses).
       - name: Build Vesper-Setup.exe
         shell: pwsh
         run: |
           $nsis = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+
+          if (-not $nsis) {
+            throw "NSIS installer not found!"
+          }
+
           New-Item -ItemType Directory -Force installer/src-tauri/payload | Out-Null
+
           Copy-Item $nsis.FullName installer/src-tauri/payload/vesper-setup.exe
+
           Push-Location installer
           npm install
           npx tauri build --no-bundle
           Pop-Location
+
           Copy-Item installer/src-tauri/target/release/vesper-setup.exe Vesper-Setup.exe
 
-      - name: Attach Vesper-Setup.exe to the release
+      - name: Attach Vesper-Setup.exe to release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" Vesper-Setup.exe --clobber
+        run: |
+          gh release upload "${{ github.ref_name }}" Vesper-Setup.exe --clobber
