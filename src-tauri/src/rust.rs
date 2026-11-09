@@ -80,6 +80,21 @@ fn client_exe(dir: &Path) -> PathBuf {
 }
 fn prepare_exe(dir: &Path) -> PathBuf { dir.join("horizon-prepare.exe") }
 
+/// Ids of the native mods compiled into the installed Vesper build. The build workflow writes them to
+/// `vesper-mods.json` beside the client; an older build has no such file, so none.
+pub fn builtin_ids() -> Vec<String> {
+    let dir = build_dir(&load_state().build);
+    std::fs::read(dir.join("vesper-mods.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| {
+            v.get("mods")
+                .and_then(|m| m.as_array())
+                .map(|a| a.iter().filter_map(|m| m.get("id").and_then(|i| i.as_str()).map(String::from)).collect())
+        })
+        .unwrap_or_default()
+}
+
 fn command(program: &Path) -> Command {
     let mut c = Command::new(program);
     // Vesper does not send anything to Horizon's servers: no "playing now" ping, no cosmetics

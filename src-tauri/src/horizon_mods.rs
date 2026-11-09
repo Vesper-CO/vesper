@@ -5,16 +5,17 @@
 //! is checked against it before it reaches the game folder: HTTPS from GitHub's release servers, the
 //! size and SHA-256 the index lists, a plain file name, and the index's list of files taken down.
 //!
-//! What can be installed: content mods (`.hmod` files with no code), which the game reads from
-//! `horizon-mods/` when it starts. Native mods (`.hnmod`, 100+ of the library) are Rust source that
-//! has to be compiled into the game itself, which Vesper does not do yet: they are listed, marked,
-//! and cannot be installed.
+//! Content mods (`.hmod` files with no code) are installed here: the game reads them from
+//! `horizon-mods/` when it starts. Native mods (`.hnmod`, 100+ of the library) are Rust source that is
+//! compiled into the game itself: Vesper's client is built with the ones listed in the `vesper-rust`
+//! repository's `native-mods.txt` (they show as "Built in", and are switched on and off in the game's
+//! Options > Mods). The others are listed but cannot be installed one by one.
 use crate::{download::client, error::CmdResult, instances, paths};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{path::PathBuf, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{collections::HashSet, path::PathBuf, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
 const INDEX_URL: &str = "https://horizon-rust.github.io/horizon-mods/index.json";
 const SITE: &str = "https://playhorizon.dev/mods";
@@ -159,11 +160,12 @@ fn has_code(v: &Version) -> bool {
     v.file.name.ends_with(".hmod") && v.capabilities.iter().any(|c| c != "registries")
 }
 
-/// "ok" (installable), "native" (needs a compiled game), "code" (a code mod the game no longer runs),
+/// "builtin" (a native mod compiled into the installed client), "ok" (installable), "native" (a native
+/// mod that is not in the client), "code" (a code mod the game no longer runs),
 /// "version" (nothing for this Minecraft version), "other" (not a mod: modpacks, worlds...).
 fn support(p: &Project, revoked: &[Revoked], game: &str) -> &'static str {
     if p.kind == "native-mod" {
-        return "native";
+        return if crate::rust::builtin_ids().contains(&p.id) { "builtin" } else { "native" };
     }
     if p.kind != "mod" {
         return "other";
@@ -260,7 +262,8 @@ async fn download_checked(f: &File) -> Result<Vec<u8>> {
 async fn install_one(inst: &str, game: &str, p: &Project, revoked: &[Revoked]) -> Result<()> {
     match support(p, revoked, game) {
         "ok" => {}
-        "native" => bail!("{} is a native mod: it has to be compiled into the game, which Vesper cannot do yet.", p.name),
+        "builtin" => bail!("{} is already built into the game.", p.name),
+        "native" => bail!("{} is a native mod: it has to be compiled into the game, and is not in this build of it.", p.name),
         "code" => bail!("{} contains code that the game no longer runs.", p.name),
         "other" => bail!("{} is not a mod.", p.name),
         _ => bail!("{} has no version for Minecraft {game}.", p.name),
@@ -314,16 +317,18 @@ pub async fn horizon_search(instance_id: String, query: String, show_native: boo
     let (projects, revoked) = library().await?;
     let items = read_items(&instance_id);
     let words: Vec<String> = query.to_lowercase().split_whitespace().map(String::from).collect();
+    let built: HashSet<String> = crate::rust::builtin_ids().into_iter().collect();
     let mut found: Vec<&Project> = projects
         .iter()
-        .filter(|p| p.kind == "mod" || (show_native && p.kind == "native-mod"))
+        .filter(|p| p.kind == "mod" || (p.kind == "native-mod" && (show_native || built.contains(&p.id))))
         .filter(|p| {
             let hay = format!("{} {} {} {} {}", p.id, p.name, p.summary, p.authors.join(" "), p.categories.join(" ")).to_lowercase();
             words.iter().all(|w| hay.contains(w.as_str()))
         })
         .collect();
-    // What can be installed first, then the most downloaded.
-    found.sort_by_key(|p| (support(p, &revoked, &inst.mc_version) != "ok", std::cmp::Reverse(p.downloads)));
+    // What is in the game first, then what can be installed, then the rest; the most downloaded first.
+    let rank = |p: &Project| match support(p, &revoked, &inst.mc_version) { "builtin" => 0, "ok" => 1, _ => 2 };
+    found.sort_by_key(|p| (rank(p), std::cmp::Reverse(p.downloads)));
     let total = found.len();
     let hits: Vec<Value> = found
         .into_iter()

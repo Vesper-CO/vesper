@@ -37,13 +37,13 @@ export async function render(el) {
 
 // ---------- Horizon's mod library (Rust instances) ----------
 
-const NATIVE_NOTE = 'Native mods are Rust code compiled into the game itself. Vesper cannot build that yet, so they are listed but cannot be installed.';
+const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built. The ones marked Built in are in your game now: switch each on or off in the game under Options > Mods. The others are not in the build.';
 
 async function browseHorizon(inst) {
   const body = $('#body');
   body.innerHTML = `<div class="filters">
       <input type="search" id="q" placeholder="Search the Horizon library" value="${esc(H.q)}" aria-label="Search">
-      <label class="row" style="gap:8px;flex-wrap:nowrap"><button class="switch ${H.native ? 'on' : ''}" id="nat" role="switch" aria-checked="${H.native}"></button><span>Show native mods</span></label></div>
+      <label class="row" style="gap:8px;flex-wrap:nowrap"><button class="switch ${H.native ? 'on' : ''}" id="nat" role="switch" aria-checked="${H.native}"></button><span>Show all native mods</span></label></div>
     <p class="muted" id="count"></p><p class="muted" id="hnote" ${H.native ? '' : 'hidden'}>${NATIVE_NOTE}</p>
     <div class="list" id="hits"></div><div class="row" style="justify-content:center;margin-top:16px"><button class="btn" id="more" hidden>Load more</button></div>`;
   let timer;
@@ -71,10 +71,12 @@ async function hsearch(inst, reset) {
 }
 
 const hButton = (h) => {
+  if (h.support === 'builtin') return '<button class="btn sm" disabled>Built in</button>';
   if (h.installed && !h.update) return '<button class="btn sm" disabled>Installed</button>';
   if (h.installed && h.update) return '<button class="btn primary sm" data-i="1">Update</button>';
   if (h.support === 'ok') return '<button class="btn primary sm" data-i="1">Install</button>';
-  const why = { native: 'Needs a native build', code: 'Not supported', version: 'No 26.3 version', other: 'Not a mod' }[h.support] || 'Unavailable';
+  if (h.support === 'builtin') return '<button class="btn sm" disabled>Built in</button>';
+  const why = { native: 'Not in the build', code: 'Not supported', version: 'No 26.3 version', other: 'Not a mod' }[h.support] || 'Unavailable';
   return `<button class="btn sm" disabled>${why}</button>`;
 };
 
@@ -84,9 +86,9 @@ function hpaint() {
   box.innerHTML = H.hits.length ? H.hits.map((h) => `<div class="mod" data-h="${esc(h.id)}" tabindex="0">
       ${h.icon ? `<img class="icon" loading="lazy" alt="" src="${esc(h.icon)}">` : '<div class="icon"></div>'}
       <div style="min-width:0"><div class="t">${esc(h.name)} <small class="muted">by ${esc((h.authors || []).join(', ') || 'unknown')}</small></div><p>${esc(h.summary)}</p>
-        <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(h.downloads)} downloads</span>${h.version ? `<span class="chip">${esc(h.version)}</span>` : ''}${h.kind === 'native-mod' ? '<span class="chip">Native</span>' : ''}${(h.categories || []).slice(0, 2).map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
+        <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(h.downloads)} downloads</span>${h.version ? `<span class="chip">${esc(h.version)}</span>` : ''}${h.support === 'builtin' ? '<span class="chip">Built in</span>' : h.kind === 'native-mod' ? '<span class="chip">Native</span>' : ''}${(h.categories || []).slice(0, 2).map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
       ${hButton(h)}</div>`).join('')
-    : `<div class="empty">${H.native ? 'Nothing found. Try another search.' : 'Nothing found. Native mods are hidden: turn on "Show native mods" to see them.'}</div>`;
+    : `<div class="empty">${H.native ? 'Nothing found. Try another search.' : 'Nothing found. Turn on "Show all native mods" to also see the ones that are not in the build.'}</div>`;
   $('#more').hidden = H.hits.length >= H.total;
 }
 
@@ -109,7 +111,7 @@ async function openHorizon(inst, id) {
       <div class="grow"><h2 style="margin:0">${esc(p.name)}</h2><p class="muted">${esc(p.summary)}</p>
         <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(p.downloads)} downloads</span>${p.version ? `<span class="chip">${esc(p.version)}</span>` : ''}${p.license ? `<span class="chip">${esc(p.license)}</span>` : ''}</div></div>
       <button class="btn" id="pg">Open page</button><span id="ib">${hButton(p)}</span><button class="icon-btn" id="x" aria-label="Close">&#10005;</button></div>
-    ${p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
+    ${p.support === 'builtin' ? '<p class="muted" style="margin-top:12px">Built into your game. Switch it on or off in the game under Options > Mods.</p>' : p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
     <div class="desc selectable" style="margin-top:16px">${md(p.description || p.summary)}</div>`;
   $('#x', m.el).onclick = m.close;
   $('#pg', m.el).onclick = () => invoke('open_url', { url: p.page });
