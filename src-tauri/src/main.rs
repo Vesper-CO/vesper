@@ -11,6 +11,7 @@ mod modrinth;
 mod mojang;
 mod mrpack;
 mod paths;
+mod presence;
 mod rust;
 mod settings;
 
@@ -81,6 +82,7 @@ fn main() {
         .setup(|app| {
             let ok = app.handle().plugin(tauri_plugin_updater::Builder::new().build()).is_ok();
             app.manage(UpdaterReady(ok));
+            presence::start(settings::load().discord_presence);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -108,6 +110,8 @@ fn main() {
             launch::play,
             launch::kill_game,
             launch::running_instances,
+            presence::presence_available,
+            presence::presence_page,
             horizon_mods::horizon_search,
             horizon_mods::horizon_project,
             horizon_mods::horizon_install,

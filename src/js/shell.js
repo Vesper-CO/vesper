@@ -16,6 +16,7 @@ export function buildNav() {
 
 export async function go(view) {
   S.view = view;
+  invoke('presence_page', { page: view }).catch(() => {});
   $$('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === view));
   const act = $('.nav-item.active'), ind = $('.nav-ind');
   if (act && ind) { ind.style.height = act.offsetHeight + 'px'; ind.style.transform = `translateY(${act.offsetTop}px)`; }

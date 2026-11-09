@@ -75,6 +75,10 @@ pub fn supervise(app: &AppHandle, running: &Running, id: String, mut child: Chil
     if let Some(e) = child.stderr.take() { pipe(app.clone(), id.clone(), e, "err"); }
     let (tx, rx) = oneshot::channel::<()>();
     running.0.lock().unwrap().insert(id.clone(), tx);
+    if let Ok(inst) = crate::instances::load(&id) {
+        let game_owns = inst.loader == "rust" && crate::rust::game_shows_presence();
+        crate::presence::playing(&inst.name, &crate::presence::detail(&inst.mc_version, &inst.loader), game_owns);
+    }
     let app2 = app.clone();
     tokio::spawn(async move {
         let code = tokio::select! {
@@ -82,6 +86,7 @@ pub fn supervise(app: &AppHandle, running: &Running, id: String, mut child: Chil
             _ = rx => { let _ = child.kill().await; None }
         };
         app2.state::<Running>().0.lock().unwrap().remove(&id);
+        crate::presence::stopped();
         let _ = app2.emit("game-exit", json!({"id": id, "code": code}));
     });
 }

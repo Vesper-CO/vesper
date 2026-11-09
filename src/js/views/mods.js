@@ -37,7 +37,7 @@ export async function render(el) {
 
 // ---------- Horizon's mod library (Rust instances) ----------
 
-const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built. The ones marked Built in are in your game now: switch each on or off in the game under Options > Mods. The others are not in the build.';
+const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built. The ones marked Built in are in your game and start switched off: turn each one on in the game under Options > Mods. The others are not in the build.';
 
 async function browseHorizon(inst) {
   const body = $('#body');
@@ -111,7 +111,7 @@ async function openHorizon(inst, id) {
       <div class="grow"><h2 style="margin:0">${esc(p.name)}</h2><p class="muted">${esc(p.summary)}</p>
         <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(p.downloads)} downloads</span>${p.version ? `<span class="chip">${esc(p.version)}</span>` : ''}${p.license ? `<span class="chip">${esc(p.license)}</span>` : ''}</div></div>
       <button class="btn" id="pg">Open page</button><span id="ib">${hButton(p)}</span><button class="icon-btn" id="x" aria-label="Close">&#10005;</button></div>
-    ${p.support === 'builtin' ? '<p class="muted" style="margin-top:12px">Built into your game. Switch it on or off in the game under Options > Mods.</p>' : p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
+    ${p.support === 'builtin' ? '<p class="muted" style="margin-top:12px">Built into your game. It starts switched off: turn it on in the game under Options > Mods.</p>' : p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
     <div class="desc selectable" style="margin-top:16px">${md(p.description || p.summary)}</div>`;
   $('#x', m.el).onclick = m.close;
   $('#pg', m.el).onclick = () => invoke('open_url', { url: p.page });

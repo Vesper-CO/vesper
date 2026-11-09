@@ -95,11 +95,32 @@ pub fn builtin_ids() -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Whether the installed client shows its own Discord presence (singleplayer, multiplayer, dimension...).
+/// The build workflow records it in `vesper-mods.json` (`"discord": true`) when it was built with
+/// Vesper's Discord application id. Older builds have no such file, so no.
+fn client_has_presence() -> bool {
+    let dir = build_dir(&load_state().build);
+    std::fs::read(dir.join("vesper-mods.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.get("discord").and_then(|d| d.as_bool()))
+        .unwrap_or(false)
+}
+
+/// The game shows its own Discord presence, so the launcher steps aside while it runs.
+pub fn game_shows_presence() -> bool {
+    crate::presence::available() && crate::settings::load().discord_presence && client_has_presence()
+}
+
 fn command(program: &Path) -> Command {
     let mut c = Command::new(program);
     // Vesper does not send anything to Horizon's servers: no "playing now" ping, no cosmetics
-    // service, no Discord presence.
-    c.env("HORIZON_TELEMETRY_URL", "off").env("HORIZON_NO_HEARTBEAT", "1").env("HORIZON_COSMETICS", "0").env("HORIZON_NO_DISCORD", "1");
+    // service. The client's own Discord presence runs only under Vesper's application, when the
+    // build has one and the player has not turned it off in Vesper's settings.
+    c.env("HORIZON_TELEMETRY_URL", "off").env("HORIZON_NO_HEARTBEAT", "1").env("HORIZON_COSMETICS", "0");
+    if !game_shows_presence() {
+        c.env("HORIZON_NO_DISCORD", "1");
+    }
     #[cfg(windows)]
     c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     c.kill_on_drop(true);
@@ -391,6 +412,8 @@ pub async fn play(app: AppHandle, running: &Running, mut inst: Instance, sess: S
     let home = paths::instance_dir(&id).join("home");
     std::fs::create_dir_all(&game)?;
     std::fs::create_dir_all(&home)?;
+    // The native mods built into the client start switched off; the player turns them on in the game.
+    let _ = crate::horizon_mods::start_builtin_off(&id);
 
     stage(&app, &id, "Launching");
     let mut c = command(&client_exe(&build.dir));

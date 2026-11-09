@@ -14,6 +14,8 @@ export async function render(el) {
       <label class="field"><span>Default memory for new instances: <b id="ramv">${ramLabel(s.default_ram_mb)}</b></span><input type="range" id="ram" min="1024" max="16384" step="512" value="${s.default_ram_mb}"></label>
       <label class="field"><span>Custom java.exe (optional)</span><input type="text" id="java" value="${esc(s.java_path)}" placeholder="Leave empty to use the Java that Mojang provides"></label>
     </div>
+    <h2>Discord</h2>
+    <div class="card" id="dc"></div>
     <h2>Updates</h2>
     <div class="card"><div class="row" style="justify-content:space-between"><span>Check for updates when Vesper starts</span><button class="switch ${s.auto_update ? 'on' : ''}" id="auto" role="switch" aria-checked="${s.auto_update}" aria-label="Check for updates on start"></button></div>
       <div class="row"><button class="btn" id="check">Check for updates</button><button class="btn" id="data">Open data folder</button></div></div>
@@ -25,6 +27,15 @@ export async function render(el) {
   $('#ram').onchange = save;
   $('#java').onchange = (e) => { S.settings.java_path = e.target.value; save(); };
   $('#auto').onclick = (e) => { S.settings.auto_update = !S.settings.auto_update; e.target.classList.toggle('on', S.settings.auto_update); e.target.setAttribute('aria-checked', S.settings.auto_update); save(); };
+  const dc = $('#dc');
+  let avail = false;
+  try { avail = await invoke('presence_available'); } catch { /* an older build */ }
+  dc.innerHTML = avail
+    ? `<div class="row" style="justify-content:space-between"><span>Show what I am playing on Discord</span><button class="switch ${s.discord_presence ? 'on' : ''}" id="dcs" role="switch" aria-checked="${!!s.discord_presence}" aria-label="Discord Rich Presence"></button></div>
+       <p class="muted" style="margin:8px 0 0">Shows the instance name and Minecraft version, and in Vesper's Rust client whether you are in singleplayer or multiplayer. Never server addresses or accounts.</p>`
+    : '<p class="muted" style="margin:0">Discord Rich Presence is not set up in this build of Vesper.</p>';
+  const dcs = $('#dcs');
+  if (dcs) dcs.onclick = (e) => { S.settings.discord_presence = !S.settings.discord_presence; e.target.classList.toggle('on', S.settings.discord_presence); e.target.setAttribute('aria-checked', S.settings.discord_presence); save(); };
   $('#data').onclick = () => invoke('open_data_folder');
   $('#check').onclick = async () => {
     try { const info = await invoke('check_update'); if (!info) return toast('Vesper is up to date', 'ok'); promptUpdate(info); } catch (e) { toast(errMsg(e), 'error'); }

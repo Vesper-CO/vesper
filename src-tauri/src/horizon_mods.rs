@@ -224,6 +224,49 @@ fn set_enabled(inst: &str, id: &str, on: bool) -> Result<()> {
     Ok(())
 }
 
+// ---------- built-in native mods start off ----------
+
+/// `text` (a `horizon-mods.txt`) with a `mod.<id>:false` line added for each id that has no line yet.
+fn with_off_lines(text: &str, ids: &[String]) -> String {
+    let mut out = text.to_string();
+    for id in ids {
+        let k = key(id);
+        if !out.lines().any(|l| l.trim_start().starts_with(&k)) {
+            if !out.is_empty() && !out.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push_str(&format!("{k}false\n"));
+        }
+    }
+    out
+}
+
+/// Native mods compiled into the game are on in the game until switched off. Vesper starts them off:
+/// the first time an instance meets a built-in mod it writes `mod.<id>:false` for it, once, and
+/// remembers it did. After that the choice is the player's, made in the game under Options > Mods.
+/// A mod the player already has a line for (on or off) is left as it is.
+pub fn start_builtin_off(inst: &str) -> Result<()> {
+    let ids = crate::rust::builtin_ids();
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let seen_path = paths::instance_dir(inst).join("vesper-native-seen.json");
+    let mut seen: Vec<String> = std::fs::read(&seen_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let fresh: Vec<String> = ids.into_iter().filter(|i| !seen.contains(i)).collect();
+    if fresh.is_empty() {
+        return Ok(());
+    }
+    let text = std::fs::read_to_string(settings_path(inst)).unwrap_or_default();
+    let out = with_off_lines(&text, &fresh);
+    if out != text {
+        std::fs::create_dir_all(paths::game_dir(inst))?;
+        std::fs::write(settings_path(inst), out)?;
+    }
+    seen.extend(fresh);
+    std::fs::write(&seen_path, serde_json::to_vec(&seen)?)?;
+    Ok(())
+}
+
 // ---------- installing ----------
 
 /// Files come from GitHub's release servers, as the index promises (docs/api/mod-index.md).

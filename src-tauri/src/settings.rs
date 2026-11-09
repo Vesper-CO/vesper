@@ -9,11 +9,13 @@ pub struct Settings {
     /// Optional: use this java.exe instead of Mojang's runtime.
     pub java_path: String,
     pub auto_update: bool,
+    /// Show what is being played on the player's Discord profile.
+    pub discord_presence: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { theme: "dark".into(), default_ram_mb: 4096, java_path: String::new(), auto_update: true }
+        Self { theme: "dark".into(), default_ram_mb: 4096, java_path: String::new(), auto_update: true, discord_presence: true }
     }
 }
 
@@ -27,5 +29,6 @@ pub fn get_settings() -> Settings { load() }
 #[tauri::command]
 pub fn save_settings(settings: Settings) -> CmdResult<()> {
     std::fs::write(paths::settings_file(), serde_json::to_vec_pretty(&settings)?)?;
+    crate::presence::set_enabled(settings.discord_presence);
     Ok(())
 }
