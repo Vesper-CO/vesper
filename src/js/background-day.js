@@ -95,7 +95,7 @@ export function createDay({ layers, groundAt, onReady }) {
     // clouds drift right and wrap around
     for (const c of clouds) {
       c.x += c.v * dt; if (c.x > DW + 120) { c.x = -c.w - 80; c.y = rnd(70, 400); }
-      const sp = sprite(c.name, c.w, c.h, k);
+      const base = CLOUDS.find((x) => x[0] === c.name); const sp = sprite(c.name, base[1] * 1.25, base[2] * 1.25, k);
       if (sp) { A(c.a); ctx.drawImage(sp, c.x - mx * c.par, c.y - my * c.par * 0.5, c.w, c.h); }
     }
 
@@ -139,5 +139,12 @@ export function createDay({ layers, groundAt, onReady }) {
     ctx.globalAlpha = 1;
   }
 
-  return { draw, load };
+  // Bake every sprite ahead of time so switching to Light doesn't have to do it on the first frame.
+  function warm({ W, H, dpr, k }) {
+    sprite('sky', W, H, dpr); sprite('sun-rays', 900, 900, k); sprite('sun', 470, 470, k); sprite('tree', 120, 210, k);
+    for (const [n, , , w, h] of HILLS) sprite(n, w, h, k);
+    for (const [n, w, h] of CLOUDS) sprite(n, w * 1.25, h * 1.25, k);
+  }
+
+  return { draw, load, warm };
 }

@@ -1,7 +1,7 @@
 // The Vesper banner, alive: twinkling stars, a breathing moon, shooting stars,
 // blocky hills with mouse parallax, and fireflies that scatter away from the cursor.
 // Light mode swaps the night for a sunny day (see background-day.js and assets/day/): when the
-// theme changes, the scene does a quick crossfade between night and day.
+// theme changes, the scene switches straight between night and day.
 import { createDay } from './background-day.js';
 const DW = 1500, DH = 900;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -33,7 +33,7 @@ export function startBackground(canvas) {
   let mix = target(), raf = 0, bakeK = 1, bakeTimer = 0;
   const smooth = (x) => x * x * (3 - 2 * x);
   const kick = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(frame); };
-  const day = createDay({ layers, groundAt, onReady: () => reduce && kick() });
+  const day = createDay({ layers, groundAt, onReady: () => { day.warm({ W, H, dpr, k: bakeK }); if (reduce) kick(); } });
   day.load(); // tiny files; preloaded so the first theme switch has no delay
 
   const flies = Array.from({ length: 28 }, () => ({ x: rnd(0, DW), y: rnd(560, 830), vx: rnd(-8, 8), vy: rnd(-6, 6), p: rnd(0, 6.28), s: rnd(0.8, 2) }));
@@ -49,7 +49,7 @@ export function startBackground(canvas) {
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     scale = Math.max(W / DW, H / DH);
     ox = (W - DW * scale) / 2; oy = (H - DH * scale) / 2;
-    clearTimeout(bakeTimer); bakeTimer = setTimeout(() => { bakeK = dpr * scale; if (reduce) kick(); }, 180);
+    clearTimeout(bakeTimer); bakeTimer = setTimeout(() => { bakeK = dpr * scale; day.warm({ W, H, dpr, k: bakeK }); if (reduce) kick(); }, 180);
   }
   addEventListener('resize', resize); resize(); bakeK = dpr * scale;
   addEventListener('pointermove', (e) => { mouse.tx = (e.clientX / W) * 2 - 1; mouse.ty = (e.clientY / H) * 2 - 1; mouse.px = e.clientX; mouse.py = e.clientY; });
@@ -67,12 +67,12 @@ export function startBackground(canvas) {
     const mx = mouse.x + Math.sin(t * 0.18) * 0.25, my = mouse.y + Math.cos(t * 0.15) * 0.12;
 
     const tg = target();
-    if (reduce) mix = tg; else if (mix !== tg) { mix += Math.sign(tg - mix) * Math.min(Math.abs(tg - mix), dt / 0.3); }
+    mix = tg; // theme changes are instant
     const d = smooth(mix);
     if (d > 0) day.draw(ctx, { t, dt, W, H, dpr, scale, ox, oy, k: bakeK, mx, my, cx: (mouse.px - ox) / scale, cy: (mouse.py - oy) / scale, alpha: d, rise: 0, reduce });
     if (d < 1) night(t, dt, mx, my, d);
     ctx.globalAlpha = 1;
-    if (!reduce || mix !== tg) raf = requestAnimationFrame(frame);
+    if (!reduce) raf = requestAnimationFrame(frame);
   }
 
   function night(t, dt, mx, my, d) {
@@ -146,7 +146,7 @@ export function startBackground(canvas) {
     ctx.globalAlpha = 1;
   }
   if (reduce) frame(1000); else kick();
-  // Switching theme: the loop animates the crossfade (or, with reduced motion, redraws once).
+  // Switching theme redraws right away.
   new MutationObserver(kick).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduce) { last = 0; kick(); } });
 }
