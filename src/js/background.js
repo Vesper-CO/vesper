@@ -1,5 +1,8 @@
 // The Vesper banner, alive: twinkling stars, a breathing moon, shooting stars,
 // blocky hills with mouse parallax, and fireflies that scatter away from the cursor.
+// Light mode swaps the night for a sunny day (see background-day.js and assets/day/): when the
+// theme changes, the moon sinks while the sun rises and the sky fades from night to day.
+import { createDay } from './background-day.js';
 const DW = 1500, DH = 900;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -24,6 +27,15 @@ export function startBackground(canvas) {
   const layers = [layer(690, 70, 30, 3, '#2c2370', 6), layer(755, 60, 30, 4, '#1f1855', 12), layer(820, 45, 30, 5, '#120f33', 22)];
   const groundAt = (L, x) => { let g = L.cols[0][1]; for (const [cx, h] of L.cols) if (cx <= x) g = h; return g; };
 
+  // 0 = night, 1 = day. Follows the theme set on <html data-theme="...">.
+  const root = document.documentElement;
+  const target = () => (root.dataset.theme === 'light' ? 1 : 0);
+  let mix = target(), raf = 0, bakeK = 1, bakeTimer = 0;
+  const smooth = (x) => 1 - (1 - x) * (1 - x); // ease-out, so the sky starts changing right away
+  const kick = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(frame); };
+  const day = createDay({ layers, groundAt, onReady: () => reduce && kick() });
+  day.load(); // tiny files; preloaded so the first theme switch has no delay
+
   const flies = Array.from({ length: 28 }, () => ({ x: rnd(0, DW), y: rnd(560, 830), vx: rnd(-8, 8), vy: rnd(-6, 6), p: rnd(0, 6.28), s: rnd(0.8, 2) }));
   const glow = document.createElement('canvas'); glow.width = glow.height = 48;
   { const g = glow.getContext('2d'), r = g.createRadialGradient(24, 24, 0, 24, 24, 24); r.addColorStop(0, 'rgba(220,210,255,1)'); r.addColorStop(0.25, 'rgba(170,150,255,.55)'); r.addColorStop(1, 'rgba(143,124,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 48, 48); }
@@ -37,8 +49,9 @@ export function startBackground(canvas) {
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     scale = Math.max(W / DW, H / DH);
     ox = (W - DW * scale) / 2; oy = (H - DH * scale) / 2;
+    clearTimeout(bakeTimer); bakeTimer = setTimeout(() => { bakeK = dpr * scale; if (reduce) kick(); }, 180);
   }
-  addEventListener('resize', resize); resize();
+  addEventListener('resize', resize); resize(); bakeK = dpr * scale;
   addEventListener('pointermove', (e) => { mouse.tx = (e.clientX / W) * 2 - 1; mouse.ty = (e.clientY / H) * 2 - 1; mouse.px = e.clientX; mouse.py = e.clientY; });
 
   function spark(x, y, s, a) {
@@ -49,10 +62,20 @@ export function startBackground(canvas) {
 
   let last = 0;
   function frame(ts) {
-    const t = ts / 1000, dt = Math.min(0.05, t - last || 0.016); last = t;
+    const t = ts / 1000, dt = Math.max(0.001, Math.min(0.05, t - last || 0.016)); last = t;
     mouse.x += (mouse.tx - mouse.x) * 0.05; mouse.y += (mouse.ty - mouse.y) * 0.05;
     const mx = mouse.x + Math.sin(t * 0.18) * 0.25, my = mouse.y + Math.cos(t * 0.15) * 0.12;
 
+    const tg = target();
+    if (reduce) mix = tg; else if (mix !== tg) { mix += Math.sign(tg - mix) * Math.min(Math.abs(tg - mix), dt / 1.1); }
+    const d = smooth(mix);
+    if (d > 0) day.draw(ctx, { t, dt, W, H, dpr, scale, ox, oy, k: bakeK, mx, my, cx: (mouse.px - ox) / scale, cy: (mouse.py - oy) / scale, alpha: d, rise: (1 - d) * 560, reduce });
+    if (d < 1) night(t, dt, mx, my, d);
+    ctx.globalAlpha = 1;
+    if (!reduce || mix !== tg) raf = requestAnimationFrame(frame);
+  }
+
+  function night(t, dt, mx, my, d) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const sky = ctx.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, '#0b0b17'); sky.addColorStop(0.55, '#1b1745'); sky.addColorStop(1, '#3a2d86');
@@ -61,7 +84,7 @@ export function startBackground(canvas) {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
 
     // moon glow + moon
-    const mxp = 1070 - mx * 5, myp = 330 + Math.sin(t * 0.6) * 5 - my * 3;
+    const mxp = 1070 - mx * 5, myp = 330 + Math.sin(t * 0.6) * 5 - my * 3 + d * 520; // sinks when the sun comes up
     const gl = ctx.createRadialGradient(mxp, myp, 0, mxp, myp, 560);
     gl.addColorStop(0, `rgba(154,139,255,${0.38 + Math.sin(t * 0.7) * 0.07})`); gl.addColorStop(1, 'rgba(154,139,255,0)');
     ctx.globalAlpha = 1; ctx.fillStyle = gl; ctx.fillRect(-200, -200, DW + 400, DH + 400);
@@ -121,8 +144,9 @@ export function startBackground(canvas) {
       }
     });
     ctx.globalAlpha = 1;
-    if (!reduce) requestAnimationFrame(frame);
   }
-  if (reduce) frame(1000); else requestAnimationFrame(frame);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduce) { last = 0; requestAnimationFrame(frame); } });
+  if (reduce) frame(1000); else kick();
+  // Switching theme: the loop animates the crossfade (or, with reduced motion, redraws once).
+  new MutationObserver(kick).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduce) { last = 0; kick(); } });
 }

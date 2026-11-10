@@ -3,12 +3,17 @@ import { S, applyTheme } from '../state.js';
 import { $, esc, toast, errMsg, ramLabel } from '../util.js';
 import { promptUpdate } from '../shell.js';
 
+const ico = (d) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const MOON = ico('<path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/>');
+const SUN = ico('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M5.3 18.7L7 17M17 7l1.7-1.7"/>');
+
 export async function render(el) {
   const s = S.settings;
   el.innerHTML = `<div class="page" style="max-width:720px">
     <div class="page-head"><div><h1>Settings</h1></div></div>
     <div class="card"><h3>Appearance</h3>
-      <div class="row"><button class="btn ${s.theme === 'dark' ? 'primary' : ''}" data-theme="dark">Dark</button><button class="btn ${s.theme === 'light' ? 'primary' : ''}" data-theme="light">Light</button></div></div>
+      <div class="row"><button class="btn ${s.theme === 'dark' ? 'primary' : ''}" data-theme="dark" style="display:inline-flex;align-items:center;gap:8px">${MOON}Dark</button><button class="btn ${s.theme === 'light' ? 'primary' : ''}" data-theme="light" style="display:inline-flex;align-items:center;gap:8px">${SUN}Light</button></div>
+      <p class="muted" style="margin:0">Dark is a starry night with a moon. Light is a sunny day.</p></div>
     <h2>Game</h2>
     <div class="card">
       <label class="field"><span>Default memory for new instances: <b id="ramv">${ramLabel(s.default_ram_mb)}</b></span><input type="range" id="ram" min="1024" max="16384" step="512" value="${s.default_ram_mb}"></label>
