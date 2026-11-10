@@ -3,99 +3,437 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vesper – a fast Minecraft launcher</title>
-<meta name="description" content="Vesper is a small, fast Minecraft: Java Edition launcher for Windows with Modrinth built in.">
-	<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Vesper-CO/vesper/main/src-tauri/icons/128x128.png">
+<title>Vesper – a fast Minecraft launcher, with Minecraft in Rust</title>
+<meta name="description" content="Vesper is a small, fast Minecraft launcher for Windows with Modrinth built in, and Vesper Rust: Minecraft 26.3 running natively in Rust, with no Java.">
+<meta name="theme-color" content="#0b0b17">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23b3a7ff'/%3E%3Cstop offset='1' stop-color='%237a67f5'/%3E%3C/linearGradient%3E%3Cmask id='m'%3E%3Crect width='512' height='512' fill='%23fff'/%3E%3Ccircle cx='338' cy='206' r='122' fill='%23000'/%3E%3C/mask%3E%3C/defs%3E%3Crect width='512' height='512' rx='116' fill='%230f1017'/%3E%3Ccircle cx='232' cy='280' r='150' fill='url(%23g)' mask='url(%23m)'/%3E%3Cpath d='M374 120l9 28 28 9-28 9-9 28-9-28-28-9 28-9z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
-:root{--bg:#0d0e14;--panel:#151620;--line:#272938;--text:#e9eaf2;--muted:#8e91a8;--accent:#8f7cff;--ink:#0d0b1f;--soft:rgba(143,124,255,.14)}
-@media (prefers-color-scheme:light){:root{--bg:#f3f4fa;--panel:#fff;--line:#dcdfec;--text:#1a1b2b;--muted:#656a86;--accent:#6a56ea;--ink:#fff;--soft:rgba(106,86,234,.12)}}
-*{box-sizing:border-box;margin:0}
-body{font:16px/1.6 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text)}
-a{color:var(--accent)}
-.wrap{max-width:960px;margin:0 auto;padding:0 24px}
-nav{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
-.brand .logo{
-    width:30px;
-    height:30px;
-    object-fit:contain;
-    border-radius:7px;
+:root{
+  --bg:#0b0b17;--text:#ecebf7;--muted:#a09fba;--accent:#8f7cff;--accent-ink:#0d0b1f;--accent-soft:rgba(143,124,255,.18);
+  --ok:#66e0a8;--glass:rgba(18,16,40,.58);--glass2:rgba(34,30,72,.55);--glass-strong:rgba(16,14,36,.86);
+  --line:rgba(172,160,255,.16);--radius:16px;--ease:cubic-bezier(.2,.8,.2,1);--spring:cubic-bezier(.34,1.56,.64,1);
+  --font:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;--mono:"Cascadia Mono",Consolas,monospace;
+  color-scheme:dark;
 }
-.hero{padding:64px 0 48px;display:grid;gap:20px;justify-items:start}
-h1{font-size:clamp(34px,6vw,56px);line-height:1.1;letter-spacing:-1px;max-width:15ch}
-.lead{color:var(--muted);font-size:19px;max-width:52ch}
-.cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px}
-.btn{display:inline-block;padding:14px 26px;border-radius:12px;background:var(--accent);color:var(--ink);font-weight:700;text-decoration:none;transition:filter .15s,transform .08s}
-.btn:hover{filter:brightness(1.1)}.btn:active{transform:scale(.98)}
-.btn.ghost{background:var(--panel);color:var(--text);border:1px solid var(--line);font-weight:600}
+@media (prefers-color-scheme:light){:root{
+  --bg:#eceefa;--text:#1c1b30;--muted:#5d5b7c;--accent:#6a56ea;--accent-ink:#fff;--accent-soft:rgba(106,86,234,.14);
+  --ok:#1e9e6a;--glass:rgba(255,255,255,.7);--glass2:rgba(238,236,255,.75);--glass-strong:rgba(255,255,255,.94);
+  --line:rgba(90,70,200,.18);color-scheme:light}
+  #bg{opacity:.32}
+}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{font:16px/1.6 var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+#bg{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}
+.wrap{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 24px}
+main,footer{position:relative;z-index:1}
+
+/* glass, like the app */
+.glass,.card,.mock,.faq details,.note{background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3)}
+.card{position:relative;border-radius:var(--radius);padding:20px;display:grid;gap:8px;align-content:start;
+  transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(var(--ty,0px));
+  transition:transform .2s var(--ease),border-color .25s,box-shadow .25s;will-change:transform}
+.card:hover{--ty:-3px;border-color:rgba(172,160,255,.45);box-shadow:0 14px 40px rgba(0,0,0,.32),0 0 0 1px rgba(143,124,255,.12)}
+.card::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;
+  background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(143,124,255,.22),transparent 65%)}
+.card:hover::before{opacity:1}
+.card h3{font-size:16px;font-weight:650}
+.card p{color:var(--muted);font-size:15px}
+.ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);margin-bottom:4px}
+.ico svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* nav */
+header.nav{position:sticky;top:0;z-index:10;padding:12px 0;transition:background .25s,border-color .25s,backdrop-filter .25s;border-bottom:1px solid transparent}
+header.nav.stuck{background:var(--glass-strong);border-color:var(--line);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.3px;font-size:18px;color:var(--text);text-decoration:none}
+.brand svg{width:30px;height:30px;filter:drop-shadow(0 0 10px rgba(143,124,255,.6))}
+.links{display:flex;align-items:center;gap:6px}
+.links a.l{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:10px;font-size:15px;transition:color .2s,background .2s}
+.links a.l:hover{color:var(--text);background:var(--accent-soft)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 20px;border-radius:12px;background:var(--glass2);border:1px solid var(--line);color:var(--text);font:inherit;font-weight:600;text-decoration:none;cursor:pointer;
+  transition:background .2s,transform .15s var(--spring),box-shadow .2s,filter .2s}
+.btn:hover{background:var(--accent-soft);transform:translateY(-1px)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(135deg,#b3a7ff,#8f7cff 45%,#7a67f5);color:#0d0b1f;border-color:transparent;font-weight:700;box-shadow:0 6px 20px rgba(111,92,242,.4)}
+.btn.primary:hover{box-shadow:0 10px 28px rgba(111,92,242,.6);filter:brightness(1.07)}
+.btn.big{padding:15px 28px;font-size:17px;border-radius:14px}
+.btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding:64px 0 40px}
+.eyebrow{display:inline-flex;gap:8px;align-items:center;padding:5px 12px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:650;border:1px solid var(--line)}
+.eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+h1{font-size:clamp(36px,5.6vw,62px);line-height:1.05;letter-spacing:-1.4px;font-weight:780;margin:18px 0 16px;
+  background:linear-gradient(90deg,var(--text),#c9bfff 62%,var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+@media (prefers-color-scheme:light){h1{background:linear-gradient(90deg,#1c1b30,#6a56ea);-webkit-background-clip:text;background-clip:text}}
+.lead{color:var(--muted);font-size:19px;max-width:50ch}
+.cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:26px 0 14px}
 .meta{color:var(--muted);font-size:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:24px 0}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
-.card h3{font-size:16px;margin-bottom:6px}.card p{color:var(--muted);font-size:15px}
-h2{font-size:24px;margin:40px 0 8px}
-ol{padding-left:22px;color:var(--muted)}li{margin:6px 0}
-.note{background:var(--soft);border-radius:12px;padding:16px 18px;margin:20px 0}
-footer{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 48px;color:var(--muted);font-size:14px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:3px 11px;border-radius:99px;background:var(--glass2);color:var(--muted);font-size:13px;border:1px solid var(--line)}
+.chip.accent{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
+
+/* app mock */
+.mock{border-radius:22px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);transform:perspective(1200px) rotateY(-6deg) rotateX(2deg);transition:transform .5s var(--ease)}
+.mock:hover{transform:perspective(1200px) rotateY(-2deg) rotateX(1deg)}
+.mock .bar{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;font-size:13px;font-weight:700;letter-spacing:.3px;border-bottom:1px solid var(--line)}
+.mock .bar span{display:flex;align-items:center;gap:8px}.mock .bar svg{width:18px;height:18px}
+.mock .dots{display:flex;gap:6px}.mock .dots i{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.mock .body{display:grid;grid-template-columns:132px 1fr;min-height:318px}
+.mock nav{padding:12px 8px;border-right:1px solid var(--line);display:grid;gap:3px;align-content:start}
+.mock nav b{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px;font-weight:500;font-size:13px;color:var(--muted)}
+.mock nav b.on{color:var(--accent);font-weight:650;background:linear-gradient(90deg,var(--accent-soft),transparent 90%);box-shadow:inset 3px 0 0 var(--accent)}
+.mock nav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mock .pane{padding:16px;display:grid;gap:10px;align-content:start}
+.mock h4{font-size:16px;font-weight:750;letter-spacing:-.2px}
+.inst{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;padding:10px;border-radius:13px;background:var(--glass2);border:1px solid var(--line)}
+.inst .g{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3a2d86,#8f7cff)}
+.inst.rust .g{background:linear-gradient(135deg,#7a3b14,#f2994a)}
+.inst b{font-size:13.5px;display:block;line-height:1.25}.inst small{color:var(--muted);font-size:12px}
+.inst .play{padding:5px 12px;border-radius:9px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#b3a7ff,#8f7cff 45%,#7a67f5);color:#0d0b1f}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:11px;background:var(--glass2);border:1px solid var(--line);font-size:13px}
+.sw i{position:relative;width:34px;height:20px;border-radius:99px;background:rgba(160,150,255,.25);flex:none}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.35)}
+.sw i.on{background:var(--accent);box-shadow:0 0 12px rgba(143,124,255,.55)}.sw i.on::after{transform:translateX(14px)}
+
+/* sections */
+section{padding:56px 0 8px}
+.kicker{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.8px;text-transform:uppercase}
+h2{font-size:clamp(26px,3.6vw,38px);letter-spacing:-.8px;line-height:1.15;font-weight:750;margin:8px 0 10px}
+.sub{color:var(--muted);font-size:17px;max-width:62ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:26px}
+.grid.two{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+
+/* rust band */
+.rust{margin-top:56px;padding:38px;border-radius:26px;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.rust::after{content:"";position:absolute;inset:-35% -8% auto auto;width:480px;height:480px;background:radial-gradient(circle,rgba(242,153,74,.22),rgba(143,124,255,.16) 45%,transparent 68%);pointer-events:none;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate(-30px,24px) scale(1.08)}}
+.rust>*{position:relative;z-index:1}
+.rust .chip.rs{background:rgba(242,153,74,.16);color:#f2994a;border-color:transparent;font-weight:650}
+@media (prefers-color-scheme:light){.rust .chip.rs{color:#964805}}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:26px 0 4px}
+.fact{padding:14px 16px;border-radius:14px;background:var(--glass2);border:1px solid var(--line)}
+.fact b{display:block;font-size:22px;letter-spacing:-.4px}.fact span{color:var(--muted);font-size:13.5px}
+.modlist{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.modlist .chip{font-size:13.5px;padding:5px 13px;color:var(--text)}
+
+/* steps and faq */
+.steps{counter-reset:s;display:grid;gap:12px;margin-top:24px;list-style:none;padding:0}
+.steps li{counter-increment:s;display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:start;padding:16px;border-radius:14px;background:var(--glass);border:1px solid var(--line);color:var(--muted)}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:var(--accent-soft);color:var(--accent);font-weight:750}
+.steps b{color:var(--text)}
+.note{border-radius:14px;padding:15px 18px;margin-top:16px;color:var(--muted);font-size:15px}
+.note b{color:var(--text)}
+.faq{display:grid;gap:10px;margin-top:24px}
+.faq details{border-radius:14px;padding:4px 18px}
+.faq summary{cursor:pointer;font-weight:650;padding:13px 0;list-style:none;display:flex;justify-content:space-between;gap:14px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--accent);font-size:20px;line-height:1;transition:transform .25s var(--spring)}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq p{color:var(--muted);padding:0 0 14px;font-size:15px}
+.cta-band{margin:64px 0 0;padding:40px;border-radius:26px;text-align:center;display:grid;gap:14px;justify-items:center}
+.cta-band h2{margin:0}
+
+footer{margin-top:56px;border-top:1px solid var(--line);padding:30px 0 56px;color:var(--muted);font-size:14px;background:linear-gradient(0deg,rgba(11,11,23,.55),transparent)}
+@media (prefers-color-scheme:light){footer{background:none}}
+footer .cols{display:flex;gap:24px;justify-content:space-between;flex-wrap:wrap}
+footer p{max-width:70ch;margin-top:10px}
+
+/* reveal on scroll (only with JS) */
+.js .reveal{opacity:0;translate:0 16px;scale:.985;filter:blur(4px);transition:opacity .6s var(--ease),translate .6s var(--ease),scale .6s var(--ease),filter .6s var(--ease)}
+.js .reveal.in{opacity:1;translate:none;scale:none;filter:none}
+.js .card.reveal{transition:opacity .6s var(--ease),translate .6s var(--ease),scale .6s var(--ease),filter .6s var(--ease),transform .2s var(--ease),border-color .25s,box-shadow .25s}
+
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;padding-top:36px}
+  .mock{transform:none;max-width:520px}
+  .links a.l{display:none}
+  .rust{padding:26px 20px}
+}
+@media (max-width:420px){.mock .body{grid-template-columns:1fr}.mock nav{display:none}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+  .js .reveal{opacity:1;translate:none;scale:none;filter:none}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <nav>
-    <div class="brand">
-		<img
-			src="https://raw.githubusercontent.com/Vesper-CO/vesper/main/src-tauri/icons/128x128.png"
-			alt="Vesper"
-			class="logo"
-        >
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Vesper home">
+      <svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b3a7ff"/><stop offset="1" stop-color="#7a67f5"/></linearGradient><mask id="m"><rect width="512" height="512" fill="#fff"/><circle cx="338" cy="206" r="122" fill="#000"/></mask></defs><rect width="512" height="512" rx="116" fill="#0f1017"/><circle cx="232" cy="280" r="150" fill="url(#g)" mask="url(#m)"/><path d="M374 120l9 28 28 9-28 9-9 28-9-28-28-9 28-9z" fill="#fff"/></svg>
+      Vesper
+    </a>
+    <nav class="links" aria-label="Main">
+      <a class="l" href="#features">Features</a>
+      <a class="l" href="#rust">Vesper Rust</a>
+      <a class="l" href="#install">Install</a>
+      <a class="l" href="#faq">FAQ</a>
+      <a class="l" href="https://github.com/Vesper-CO/vesper">GitHub</a>
+      <a class="btn primary" href="https://github.com/Vesper-CO/vesper/releases/latest/download/Vesper-Setup.exe" data-dl>Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+    <section class="hero" style="padding-bottom:40px">
+      <div>
+        <span class="eyebrow"><i></i> Now with Minecraft in Rust</span>
+        <h1>A lighter way to play Minecraft.</h1>
+        <p class="lead">Vesper is a small, fast launcher for Windows. Manage instances, install mods from Modrinth in one click, launch Fabric, Quilt, Forge or NeoForge, or try <b>Vesper Rust</b>: Minecraft 26.3 running natively in Rust, with no Java at all.</p>
+        <div class="cta">
+          <a class="btn primary big" id="dl" data-dl href="https://github.com/Vesper-CO/vesper/releases/latest/download/Vesper-Setup.exe" download>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5M5 20h14"/></svg>Download for Windows</a>
+          <a class="btn big" href="#rust">See Vesper Rust</a>
+        </div>
+        <p class="meta" id="meta">Windows 10 or 11, 64-bit. No admin rights needed.</p>
+      </div>
+
+      <div class="mock" aria-hidden="true">
+        <div class="bar"><span><svg viewBox="0 0 512 512"><rect width="512" height="512" rx="116" fill="#0f1017"/><circle cx="232" cy="280" r="150" fill="#8f7cff"/><circle cx="338" cy="206" r="122" fill="#0f1017"/></svg>Vesper</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <div class="body">
+          <nav>
+            <b><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Home</b>
+            <b class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Instances</b>
+            <b><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>Mods</b>
+            <b><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Accounts</b>
+            <b><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Settings</b>
+          </nav>
+          <div class="pane">
+            <h4>Instances</h4>
+            <div class="inst"><div class="g"></div><div><b>Survival</b><small>Fabric · 1.21.1 · 24 mods</small></div><span class="play">Play</span></div>
+            <div class="inst rust"><div class="g"></div><div><b>Vesper Rust</b><small>Rust · 26.3 · no Java</small></div><span class="play">Play</span></div>
+            <div class="inst"><div class="g"></div><div><b>Modpack run</b><small>NeoForge · 1.21.1</small></div><span class="play">Play</span></div>
+            <div class="sw"><span>Zoom <small style="color:var(--muted)">built-in mod</small></span><i class="on"></i></div>
+            <div class="sw"><span>Minimap <small style="color:var(--muted)">built-in mod</small></span><i></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="reveal"><div class="kicker">Launcher</div><h2>Small, quick, and out of your way.</h2>
+        <p class="sub">Everything you need to keep your Minecraft setups tidy, in a launcher that starts fast and stays light.</p></div>
+      <div class="grid">
+        <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></div><h3>Small and quick</h3><p>An installer of a few megabytes that starts fast and stays light on memory.</p></div>
+        <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><h3>Modrinth built in</h3><p>Search mods, resource packs, shaders and modpacks. Dependencies are installed for you.</p></div>
+        <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div><h3>Instances</h3><p>Separate versions, loaders, mods, memory and Java settings for every setup. Fabric, Quilt, Forge and NeoForge.</p></div>
+        <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Safe sign-in</h3><p>You sign in on Microsoft’s own page. Vesper never sees your password, and tokens are stored encrypted.</p></div>
+        <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-3-6.7M21 4v5h-5"/></svg></div><h3>Updates itself</h3><p>New launcher versions download and install automatically.</p></div>
+        <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/></svg></div><h3>Dark and light</h3><p>Dark by default, with a light theme in Settings. Discord Rich Presence is there too, and optional.</p></div>
+      </div>
+    </section>
+
+    <section id="rust" class="rust glass reveal">
+      <div class="kicker" style="color:#f2994a">New</div>
+      <h2>Vesper Rust: Minecraft 26.3, without Java.</h2>
+      <p class="sub">Vesper Rust runs Minecraft natively, rewritten in Rust. There is no Java to install or tune, so memory and Java settings simply do not apply. It is built on the open-source <a href="https://github.com/horizon-rust/horizon">Horizon</a> client, with Vesper’s own look and its own checks on top.</p>
+      <div class="chips" style="margin-top:16px"><span class="chip rs">Rust</span><span class="chip">Minecraft 26.3</span><span class="chip">No Java</span><span class="chip">Windows 64-bit</span></div>
+
+      <div class="facts">
+        <div class="fact"><b>No Java</b><span>One native program</span></div>
+        <div class="fact"><b>Signed</b><span>Every build is verified</span></div>
+        <div class="fact"><b>Weekly</b><span>New builds from Horizon’s nightly</span></div>
+        <div class="fact"><b>Off by default</b><span>Mods wait for your say</span></div>
+      </div>
+
+      <div class="grid two">
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><h3>Built-in native mods</h3>
+          <p>Native mods are Rust code compiled into the game itself, so they run as part of it. Vesper builds a hand-picked set in. They start switched off: turn each one on or off from the Mods page in the launcher, or in the game under Options &gt; Mods.</p>
+          <div class="modlist"><span class="chip">Zoom</span><span class="chip">Minimap</span><span class="chip">Keystrokes</span><span class="chip">FPS Counter</span><span class="chip">Coordinates HUD</span><span class="chip">Recipes</span><span class="chip">AppleSkin</span><span class="chip">Armor Status</span><span class="chip">Held Item Info</span><span class="chip">Status Effect HUD</span><span class="chip">Toggle Sprint</span><span class="chip">Light Overlay</span><span class="chip">and more</span></div></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></svg></div><h3>Horizon’s mod library</h3>
+          <p>Mods for Rust come only from Horizon’s own library, the one at playhorizon.dev/mods, because Java mods do not run in a Rust game. Every download is checked against the library’s size and SHA-256 before it touches your game folder.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></div><h3>Resource packs and shaders</h3>
+          <p>The Modrinth library of resource packs and shader packs works in Rust too, from the same Mods page you already use. Older packs are offered when nothing is tagged for 26.3.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Checked, and private</h3>
+          <p>Vesper verifies each Rust build’s signature and checksum before it runs, and looks for a newer build each time you play. The client does not ping Horizon’s servers: no usage heartbeat and no cosmetics service.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></div><h3>Discord Rich Presence</h3>
+          <p>Show what you are playing on your Discord profile, in the launcher and in the game: singleplayer, multiplayer, hosting a world, even the dimension. It never shows server addresses or accounts, and one switch in Settings turns it off.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><h3>What you need</h3>
+          <p>Windows 10 or 11, 64-bit, and a graphics card with Vulkan or DirectX 12. The first launch downloads the Rust build and prepares the game from your own Minecraft account, which takes a few minutes. Java instances keep working next to it.</p></div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="reveal"><div class="kicker">Get started</div><h2>Install in a minute.</h2></div>
+      <ol class="steps">
+        <li class="reveal"><span>Download <b>Vesper-Setup.exe</b> and run it, then click <b>Install</b>.</span></li>
+        <li class="reveal"><span>If Windows shows “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.</span></li>
+        <li class="reveal"><span>Open Vesper, go to <b>Accounts</b>, and sign in with the Microsoft account that owns Minecraft: Java Edition.</span></li>
+        <li class="reveal"><span>Create an instance and press <b>Play</b>. For Rust, choose the <b>Rust</b> loader at 26.3. The first launch downloads the game, and Java for Java instances.</span></li>
+      </ol>
+      <div class="note reveal"><b>You need to own Minecraft: Java Edition.</b> Vesper has no offline or cracked mode.</div>
+    </section>
+
+    <section id="faq">
+      <div class="reveal"><div class="kicker">Questions</div><h2>Good to know.</h2></div>
+      <div class="faq">
+        <details class="reveal"><summary>Does Vesper Rust replace the normal launcher?</summary><p>No. Java instances and Rust instances live side by side in the same launcher. Pick Rust only for the instances you want to run without Java.</p></details>
+        <details class="reveal"><summary>Can I use my Fabric or Forge mods in Rust?</summary><p>No. Those are Java mods, and a Rust game cannot run Java code. Rust instances use mods from Horizon’s library, plus resource packs and shaders from Modrinth.</p></details>
+        <details class="reveal"><summary>Why are the native mods switched off?</summary><p>Native mods change the game itself, so Vesper leaves them off until you choose. Switch the ones you want on from the Mods page or in the game, and the choice sticks. A change applies the next time you start the game.</p></details>
+        <details class="reveal"><summary>Is Vesper Rust made by Mojang?</summary><p>No. Vesper is unofficial and is not approved by or associated with Mojang or Microsoft. The Rust client is built from the open-source Horizon project, under its MIT licence.</p></details>
+      </div>
+    </section>
+
+    <div class="cta-band glass reveal">
+      <h2>Ready when you are.</h2>
+      <p class="sub">Free, small, and yours to tune.</p>
+      <a class="btn primary big" data-dl href="https://github.com/Vesper-CO/vesper/releases/latest/download/Vesper-Setup.exe" download>Download for Windows</a>
+      <span class="meta" id="meta2"></span>
     </div>
-    <a href="https://github.com/Vesper-CO/vesper">GitHub</a>
-  </nav>
+  </div>
+</main>
 
-  <section class="hero">
-    <h1>A lighter way to play Minecraft.</h1>
-    <p class="lead">Vesper is a small, fast launcher for Minecraft: Java Edition. Manage instances, install mods from Modrinth in one click, and launch Fabric, Quilt, Forge or NeoForge without fuss.</p>
-    <div class="cta">
-      <a class="btn" id="dl" href="https://github.com/Vesper-CO/vesper/releases/latest/download/Vesper-Setup.exe" download>Download for Windows</a>
-      <a class="btn ghost" href="https://github.com/Vesper-CO/vesper/releases">All versions</a>
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <span class="brand" style="font-size:16px">Vesper</span>
+      <span><a href="https://github.com/Vesper-CO/vesper">Launcher on GitHub</a> &nbsp;·&nbsp; <a href="https://github.com/Vesper-CO/vesper-rust">Vesper Rust</a> &nbsp;·&nbsp; <a href="https://github.com/Vesper-CO/vesper/releases">All versions</a> &nbsp;·&nbsp; <a href="https://playhorizon.dev/mods">Horizon mods</a></span>
     </div>
-    <p class="meta" id="meta">Windows 10 or 11, 64-bit. No admin rights needed.</p>
-  </section>
+    <p>Vesper is an unofficial launcher and is not approved by or associated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB. Game files are downloaded from Mojang’s servers onto your PC and are never redistributed by Vesper. The Rust client is built from <a href="https://github.com/horizon-rust/horizon">Horizon</a>, which is released under the MIT licence.</p>
+  </div>
+</footer>
 
-  <section class="grid">
-    <div class="card"><h3>Small and quick</h3><p>An installer of a few megabytes that starts fast and stays light on memory.</p></div>
-    <div class="card"><h3>Modrinth built in</h3><p>Search mods, resource packs, shaders and modpacks. Dependencies are installed for you.</p></div>
-    <div class="card"><h3>Instances</h3><p>Separate versions, loaders, mods, memory and Java settings for every world setup.</p></div>
-    <div class="card"><h3>Safe sign-in</h3><p>You sign in on Microsoft’s own page. Vesper never sees your password, and tokens are stored encrypted.</p></div>
-    <div class="card"><h3>Updates itself</h3><p>New launcher versions download and install automatically.</p></div>
-    <div class="card"><h3>Dark and light</h3><p>Dark by default, with a light theme in Settings.</p></div>
-  </section>
-
-  <h2>Install</h2>
-  <ol>
-    <li>Download Vesper-Setup.exe and run it, then click <b>Install</b>.</li>
-    <li>If Windows shows “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.</li>
-    <li>Open Vesper, go to <b>Accounts</b>, and sign in with the Microsoft account that owns Minecraft: Java Edition.</li>
-    <li>Create an instance and press <b>Play</b>. The first launch downloads the game and Java.</li>
-  </ol>
-  <div class="note">You need to own Minecraft: Java Edition. Vesper has no offline or cracked mode.</div>
-
-  <footer>
-    Vesper is an unofficial launcher and is not approved by or associated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB. Game files are downloaded from Mojang’s servers onto your PC and are never redistributed by Vesper.
-  </footer>
-</div>
 <script>
-// The button already links straight to the newest vesper.exe; this only adds the version and size.
+document.documentElement.classList.add('js');
+
+// ---- the same night sky as the app: stars, a breathing moon, shooting stars, blocky hills, fireflies
+(() => {
+  const canvas = document.getElementById('bg'); if (!canvas || !canvas.getContext) return;
+  const ctx = canvas.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DW = 1500, DH = 900, rnd = (a, b) => a + Math.random() * (b - a);
+  let W = 0, H = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
+  const mouse = { x: 0, y: 0, tx: 0, ty: 0, px: -999, py: -999 };
+  const stars = Array.from({ length: 170 }, () => ({ x: rnd(0, DW), y: rnd(0, 620), r: rnd(.6, 2.2), p: rnd(0, 6.28), s: rnd(.6, 2.4), a: rnd(.35, 1) }));
+  const sparks = [[1215, 215, 34], [330, 170, 20], [690, 95, 14], [120, 330, 12], [1380, 120, 16]].map(([x, y, s]) => ({ x, y, s, p: rnd(0, 6.28) }));
+  function layer(base, amp, step, seed, color, par) {
+    let h = base, s = seed; const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647), cols = [];
+    for (let x = -80; x < DW + 80; x += step * 2) { h += Math.floor(rand() * 3 - 1) * step; h = Math.max(base - amp, Math.min(base + amp, h)); cols.push([x, h]); }
+    return { cols, step, color, par };
+  }
+  const layers = [layer(690, 70, 30, 3, '#2c2370', 6), layer(755, 60, 30, 4, '#1f1855', 12), layer(820, 45, 30, 5, '#120f33', 22)];
+  const groundAt = (L, x) => { let g = L.cols[0][1]; for (const [cx, h] of L.cols) if (cx <= x) g = h; return g; };
+  const flies = Array.from({ length: 28 }, () => ({ x: rnd(0, DW), y: rnd(560, 830), vx: rnd(-8, 8), vy: rnd(-6, 6), p: rnd(0, 6.28), s: rnd(.8, 2) }));
+  const glow = document.createElement('canvas'); glow.width = glow.height = 48;
+  { const g = glow.getContext('2d'), r = g.createRadialGradient(24, 24, 0, 24, 24, 24); r.addColorStop(0, 'rgba(220,210,255,1)'); r.addColorStop(.25, 'rgba(170,150,255,.55)'); r.addColorStop(1, 'rgba(143,124,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 48, 48); }
+  let shoot = null, nextShoot = rnd(2, 5), last = 0;
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 1.5); W = innerWidth; H = innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    scale = Math.max(W / DW, H / DH); ox = (W - DW * scale) / 2; oy = (H - DH * scale) / 2;
+    if (reduce) frame(1000);
+  }
+  addEventListener('resize', resize);
+  addEventListener('pointermove', (e) => { mouse.tx = (e.clientX / W) * 2 - 1; mouse.ty = (e.clientY / H) * 2 - 1; mouse.px = e.clientX; mouse.py = e.clientY; });
+  function spark(x, y, s, a) {
+    ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.beginPath();
+    ctx.moveTo(x, y - s); ctx.lineTo(x + s * .26, y - s * .26); ctx.lineTo(x + s, y); ctx.lineTo(x + s * .26, y + s * .26);
+    ctx.lineTo(x, y + s); ctx.lineTo(x - s * .26, y + s * .26); ctx.lineTo(x - s, y); ctx.lineTo(x - s * .26, y - s * .26); ctx.fill();
+  }
+  function frame(ts) {
+    const t = ts / 1000, dt = Math.min(.05, t - last || .016); last = t;
+    mouse.x += (mouse.tx - mouse.x) * .05; mouse.y += (mouse.ty - mouse.y) * .05;
+    const mx = mouse.x + Math.sin(t * .18) * .25, my = mouse.y + Math.cos(t * .15) * .12;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#0b0b17'); sky.addColorStop(.55, '#1b1745'); sky.addColorStop(1, '#3a2d86');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+    const mxp = 1070 - mx * 5, myp = 330 + Math.sin(t * .6) * 5 - my * 3;
+    const gl = ctx.createRadialGradient(mxp, myp, 0, mxp, myp, 560);
+    gl.addColorStop(0, `rgba(154,139,255,${.38 + Math.sin(t * .7) * .07})`); gl.addColorStop(1, 'rgba(154,139,255,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = gl; ctx.fillRect(-200, -200, DW + 400, DH + 400);
+    for (const s of stars) { ctx.globalAlpha = s.a * (.55 + .45 * Math.sin(t * s.s + s.p)); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.x - mx * 3, s.y - my * 2, s.r, 0, 6.283); ctx.fill(); }
+    for (const k of sparks) spark(k.x - mx * 4, k.y - my * 3, k.s * (.85 + .15 * Math.sin(t * 1.6 + k.p)), .55 + .45 * Math.sin(t * 1.6 + k.p));
+    nextShoot -= dt;
+    if (!shoot && nextShoot <= 0 && !reduce) { shoot = { x: rnd(200, 1100), y: rnd(30, 220), vx: rnd(520, 760), vy: rnd(220, 340), life: 0 }; nextShoot = rnd(6, 13); }
+    if (shoot) {
+      shoot.life += dt; shoot.x += shoot.vx * dt; shoot.y += shoot.vy * dt;
+      const a = Math.max(0, 1 - shoot.life / 1.1), len = .16;
+      const g = ctx.createLinearGradient(shoot.x, shoot.y, shoot.x - shoot.vx * len, shoot.y - shoot.vy * len);
+      g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(shoot.x, shoot.y); ctx.lineTo(shoot.x - shoot.vx * len, shoot.y - shoot.vy * len); ctx.stroke();
+      if (shoot.life > 1.1) shoot = null;
+    }
+    ctx.save(); ctx.globalAlpha = 1; ctx.beginPath();
+    ctx.rect(-400, -400, DW + 800, DH + 800); ctx.arc(mxp + 100, myp - 50, 165, 0, 6.283); ctx.clip('evenodd');
+    const mg = ctx.createLinearGradient(mxp - 200, myp - 200, mxp + 200, myp + 200);
+    mg.addColorStop(0, '#d8d1ff'); mg.addColorStop(1, '#8f7cff');
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mxp - 20, myp + 10, 215, 0, 6.283); ctx.fill(); ctx.restore();
+    layers.forEach((L, i) => {
+      const dx = -mx * L.par, dy = -my * L.par * .5;
+      ctx.globalAlpha = 1; ctx.fillStyle = L.color;
+      for (const [x, h] of L.cols) ctx.fillRect(x + dx, h + dy, L.step * 2 + 1, DH + 400 - h);
+      if (i === 1) {
+        ctx.fillStyle = '#120f33';
+        for (const tx of [150, 470, 900, 1300]) {
+          const g = groundAt(L, tx) + 20 + dy, x = tx + dx, sway = Math.sin(t * .8 + tx) * 1.2;
+          ctx.fillRect(x, g - 110, 12, 110); ctx.fillRect(x - 24 + sway, g - 170, 60, 32); ctx.fillRect(x - 12 + sway, g - 202, 36, 32); ctx.fillRect(x - 24 + sway, g - 138, 60, 30);
+        }
+        const cx = (mouse.px - ox) / scale, cy = (mouse.py - oy) / scale;
+        for (const f of flies) {
+          f.p += dt * f.s; f.vx += Math.cos(f.p) * 14 * dt; f.vy += Math.sin(f.p * 1.3) * 10 * dt;
+          const ddx = f.x - cx, ddy = f.y - cy, d2 = ddx * ddx + ddy * ddy;
+          if (d2 < 22500) { const d = Math.sqrt(d2) || 1, push = (1 - d / 150) * 420 * dt; f.vx += (ddx / d) * push; f.vy += (ddy / d) * push; }
+          f.vx *= .985; f.vy *= .985; f.x += f.vx * dt; f.y += f.vy * dt;
+          if (f.x < -20) f.x = DW + 20; if (f.x > DW + 20) f.x = -20; f.y = Math.max(520, Math.min(840, f.y));
+          ctx.globalAlpha = .5 + .5 * Math.sin(t * 2 + f.p * 3); ctx.drawImage(glow, f.x + dx - 12, f.y + dy - 12, 24, 24);
+        }
+      }
+    });
+    ctx.globalAlpha = 1;
+    if (!reduce) requestAnimationFrame(frame);
+  }
+  resize();
+  if (!reduce) requestAnimationFrame(frame);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduce) { last = 0; requestAnimationFrame(frame); } });
+})();
+
+// ---- cursor spotlight and gentle tilt on cards, like the app
+document.addEventListener('pointermove', (e) => {
+  const el = e.target.closest && e.target.closest('.card'); if (!el) return;
+  const r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  el.style.setProperty('--mx', x + 'px'); el.style.setProperty('--my', y + 'px');
+  if (r.width < 520) { el.style.setProperty('--ry', ((x / r.width - .5) * 8).toFixed(2) + 'deg'); el.style.setProperty('--rx', ((.5 - y / r.height) * 8).toFixed(2) + 'deg'); }
+});
+document.addEventListener('pointerout', (e) => {
+  const el = e.target.closest && e.target.closest('.card');
+  if (el && !el.contains(e.relatedTarget)) { el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); }
+});
+
+// ---- glass bar once scrolled, and reveal sections as they come in
+const nav = document.getElementById('nav');
+const onScroll = () => nav.classList.toggle('stuck', scrollY > 12);
+addEventListener('scroll', onScroll, { passive: true }); onScroll();
+const items = document.querySelectorAll('.reveal');
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .12, rootMargin: '0px 0px -40px 0px' });
+  items.forEach((el, i) => { el.style.transitionDelay = (i % 4) * 50 + 'ms'; io.observe(el); });
+} else items.forEach((el) => el.classList.add('in'));
+
+// ---- the buttons already link to the newest installer; this adds the version and size
 (async () => {
   try {
     const r = await fetch('https://api.github.com/repos/Vesper-CO/vesper/releases/latest');
     if (!r.ok) return;
     const rel = await r.json();
-    const exe = (rel.assets || []).find(a => /^Vesper-Setup\.exe$/i.test(a.name));
+    const exe = (rel.assets || []).find((a) => /^Vesper-Setup\.exe$/i.test(a.name));
     if (!exe) return;
-    document.getElementById('dl').href = exe.browser_download_url;
-    document.getElementById('meta').textContent =
-      `Version ${rel.tag_name.replace(/^v/, '')}, ${(exe.size / 1048576).toFixed(1)} MB. Windows 10 or 11, 64-bit. No admin rights needed.`;
+    document.querySelectorAll('[data-dl]').forEach((a) => { a.href = exe.browser_download_url; });
+    const text = `Version ${rel.tag_name.replace(/^v/, '')}, ${(exe.size / 1048576).toFixed(1)} MB. Windows 10 or 11, 64-bit. No admin rights needed.`;
+    document.getElementById('meta').textContent = text;
+    document.getElementById('meta2').textContent = text;
   } catch (e) { /* keep the fallback link */ }
 })();
 </script>
