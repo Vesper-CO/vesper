@@ -2,6 +2,10 @@
 
 A small, fast Minecraft: Java Edition launcher for Windows. Tauri (Rust + web UI), Modrinth built in.
 
+## Community
+
+Join the Discord for help, feedback and updates: https://discord.gg/FpHGhHCwgU
+
 ## Legal
 
 - Minecraft, its assets and libraries belong to Mojang/Microsoft. Vesper never bundles or redistributes them: everything is downloaded from Mojang's servers onto the user's PC, and the user must own Minecraft: Java Edition. There is no offline or cracked mode.
@@ -18,7 +22,3 @@ Besides Java, Vesper can run **Minecraft rewritten in Rust**: pick **Rust** as t
 - The build contains no Minecraft code or assets. Vesper downloads the Minecraft files from Mojang for your signed-in account (you must own Java Edition), and the game prepares itself from them. The first launch takes a few minutes.
 - It needs a graphics card with Vulkan or DirectX 12, and no Java is used to play.
 - Mods are turned off for Rust instances for now.
-
-## Community
-
-Join the Discord for help, feedback and updates: https://discord.gg/FpHGhHCwgU
