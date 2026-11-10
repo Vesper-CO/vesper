@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vesper – a fast Minecraft launcher</title>
 <meta name="description" content="Vesper is a small, fast Minecraft: Java Edition launcher for Windows with Modrinth built in.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌙%3C/text%3E%3C/svg%3E">
+	<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Vesper-CO/vesper/main/src-tauri/icons/128x128.png">
 <style>
 :root{--bg:#0d0e14;--panel:#151620;--line:#272938;--text:#e9eaf2;--muted:#8e91a8;--accent:#8f7cff;--ink:#0d0b1f;--soft:rgba(143,124,255,.14)}
 @media (prefers-color-scheme:light){:root{--bg:#f3f4fa;--panel:#fff;--line:#dcdfec;--text:#1a1b2b;--muted:#656a86;--accent:#6a56ea;--ink:#fff;--soft:rgba(106,86,234,.12)}}
@@ -15,7 +15,12 @@ a{color:var(--accent)}
 .wrap{max-width:960px;margin:0 auto;padding:0 24px}
 nav{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
-.brand svg{width:30px;height:30px}
+.brand .logo{
+    width:30px;
+    height:30px;
+    object-fit:contain;
+    border-radius:7px;
+}
 .hero{padding:64px 0 48px;display:grid;gap:20px;justify-items:start}
 h1{font-size:clamp(34px,6vw,56px);line-height:1.1;letter-spacing:-1px;max-width:15ch}
 .lead{color:var(--muted);font-size:19px;max-width:52ch}
@@ -38,18 +43,21 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 48px;colo
 <div class="wrap">
   <nav>
     <div class="brand">
-      <svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b3a7ff"/><stop offset="1" stop-color="#7a67f5"/></linearGradient><mask id="m"><rect width="512" height="512" fill="#fff"/><circle cx="338" cy="206" r="122" fill="#000"/></mask></defs><rect width="512" height="512" rx="116" fill="#0f1017"/><circle cx="232" cy="280" r="150" fill="url(#g)" mask="url(#m)"/><path d="M374 120l9 28 28 9-28 9-9 28-9-28-28-9 28-9z" fill="#fff"/></svg>
-      Vesper
+		<img
+			src="https://raw.githubusercontent.com/Vesper-CO/vesper/main/src-tauri/icons/128x128.png"
+			alt="Vesper"
+			class="logo"
+        >
     </div>
-    <a href="https://github.com/jakedev2/vesper">GitHub</a>
+    <a href="https://github.com/Vesper-CO/vesper">GitHub</a>
   </nav>
 
   <section class="hero">
     <h1>A lighter way to play Minecraft.</h1>
     <p class="lead">Vesper is a small, fast launcher for Minecraft: Java Edition. Manage instances, install mods from Modrinth in one click, and launch Fabric, Quilt, Forge or NeoForge without fuss.</p>
     <div class="cta">
-      <a class="btn" id="dl" href="https://github.com/jakedev2/vesper/releases/latest/download/Vesper-Setup.exe" download>Download for Windows</a>
-      <a class="btn ghost" href="https://github.com/jakedev2/vesper/releases">All versions</a>
+      <a class="btn" id="dl" href="https://github.com/Vesper-CO/vesper/releases/latest/download/Vesper-Setup.exe" download>Download for Windows</a>
+      <a class="btn ghost" href="https://github.com/Vesper-CO/vesper/releases">All versions</a>
     </div>
     <p class="meta" id="meta">Windows 10 or 11, 64-bit. No admin rights needed.</p>
   </section>
@@ -80,7 +88,7 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 48px;colo
 // The button already links straight to the newest vesper.exe; this only adds the version and size.
 (async () => {
   try {
-    const r = await fetch('https://api.github.com/repos/jakedev2/vesper/releases/latest');
+    const r = await fetch('https://api.github.com/repos/Vesper-CO/vesper/releases/latest');
     if (!r.ok) return;
     const rel = await r.json();
     const exe = (rel.assets || []).find(a => /^Vesper-Setup\.exe$/i.test(a.name));
