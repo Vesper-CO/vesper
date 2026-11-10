@@ -70,15 +70,15 @@ export function createDay({ layers, groundAt, onReady }) {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
 
     // sun: warm glow, turning rays, disc. It rises from below the horizon while the theme switches.
-    const sx = 1070 - mx * 5, sy = 330 + Math.sin(t * 0.6) * 5 - my * 3 + rise;
+    const sx = 1070 - mx * 5, sy = 330 + Math.sin(t * 0.6) * 5 - my * 3 + rise; // rise is 0 now (kept so the sun could be animated again)
     const gl = ctx.createRadialGradient(sx, sy, 0, sx, sy, 760);
-    gl.addColorStop(0, `rgba(255,246,196,${0.8 + Math.sin(t * 0.7) * 0.06})`); gl.addColorStop(0.35, 'rgba(255,236,160,.3)'); gl.addColorStop(1, 'rgba(255,236,160,0)');
+    gl.addColorStop(0, `rgba(255,246,196,${0.55 + Math.sin(t * 0.7) * 0.05})`); gl.addColorStop(0.35, 'rgba(255,236,160,.2)'); gl.addColorStop(1, 'rgba(255,236,160,0)');
     A(); ctx.fillStyle = gl; ctx.fillRect(-200, -200, DW + 400, DH + 400);
 
-    const RAY = 1150, SUN = 470;
+    const RAY = 900, SUN = 470;
     const rays = sprite('sun-rays', RAY, RAY, k);
     if (rays) {
-      ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.035); A(0.8 + Math.sin(t * 0.9) * 0.15);
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.035); A(0.9 + Math.sin(t * 0.9) * 0.1);
       ctx.drawImage(rays, -RAY / 2, -RAY / 2, RAY, RAY); ctx.restore();
     }
     const disc = sprite('sun', SUN, SUN, k);

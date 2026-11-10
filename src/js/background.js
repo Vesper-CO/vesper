@@ -1,7 +1,7 @@
 // The Vesper banner, alive: twinkling stars, a breathing moon, shooting stars,
 // blocky hills with mouse parallax, and fireflies that scatter away from the cursor.
 // Light mode swaps the night for a sunny day (see background-day.js and assets/day/): when the
-// theme changes, the moon sinks while the sun rises and the sky fades from night to day.
+// theme changes, the scene does a quick crossfade between night and day.
 import { createDay } from './background-day.js';
 const DW = 1500, DH = 900;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -31,7 +31,7 @@ export function startBackground(canvas) {
   const root = document.documentElement;
   const target = () => (root.dataset.theme === 'light' ? 1 : 0);
   let mix = target(), raf = 0, bakeK = 1, bakeTimer = 0;
-  const smooth = (x) => 1 - (1 - x) * (1 - x); // ease-out, so the sky starts changing right away
+  const smooth = (x) => x * x * (3 - 2 * x);
   const kick = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(frame); };
   const day = createDay({ layers, groundAt, onReady: () => reduce && kick() });
   day.load(); // tiny files; preloaded so the first theme switch has no delay
@@ -67,9 +67,9 @@ export function startBackground(canvas) {
     const mx = mouse.x + Math.sin(t * 0.18) * 0.25, my = mouse.y + Math.cos(t * 0.15) * 0.12;
 
     const tg = target();
-    if (reduce) mix = tg; else if (mix !== tg) { mix += Math.sign(tg - mix) * Math.min(Math.abs(tg - mix), dt / 1.1); }
+    if (reduce) mix = tg; else if (mix !== tg) { mix += Math.sign(tg - mix) * Math.min(Math.abs(tg - mix), dt / 0.3); }
     const d = smooth(mix);
-    if (d > 0) day.draw(ctx, { t, dt, W, H, dpr, scale, ox, oy, k: bakeK, mx, my, cx: (mouse.px - ox) / scale, cy: (mouse.py - oy) / scale, alpha: d, rise: (1 - d) * 560, reduce });
+    if (d > 0) day.draw(ctx, { t, dt, W, H, dpr, scale, ox, oy, k: bakeK, mx, my, cx: (mouse.px - ox) / scale, cy: (mouse.py - oy) / scale, alpha: d, rise: 0, reduce });
     if (d < 1) night(t, dt, mx, my, d);
     ctx.globalAlpha = 1;
     if (!reduce || mix !== tg) raf = requestAnimationFrame(frame);
@@ -84,7 +84,7 @@ export function startBackground(canvas) {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
 
     // moon glow + moon
-    const mxp = 1070 - mx * 5, myp = 330 + Math.sin(t * 0.6) * 5 - my * 3 + d * 520; // sinks when the sun comes up
+    const mxp = 1070 - mx * 5, myp = 330 + Math.sin(t * 0.6) * 5 - my * 3; // the moon stays put; the day just fades over it
     const gl = ctx.createRadialGradient(mxp, myp, 0, mxp, myp, 560);
     gl.addColorStop(0, `rgba(154,139,255,${0.38 + Math.sin(t * 0.7) * 0.07})`); gl.addColorStop(1, 'rgba(154,139,255,0)');
     ctx.globalAlpha = 1; ctx.fillStyle = gl; ctx.fillRect(-200, -200, DW + 400, DH + 400);
