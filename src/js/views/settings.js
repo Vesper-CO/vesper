@@ -33,7 +33,7 @@ export async function render(el) {
   dc.innerHTML = avail
     ? `<div class="row" style="justify-content:space-between"><span>Show what I am playing on Discord</span><button class="switch ${s.discord_presence ? 'on' : ''}" id="dcs" role="switch" aria-checked="${!!s.discord_presence}" aria-label="Discord Rich Presence"></button></div>
        <p class="muted" style="margin:8px 0 0">Shows the instance name and Minecraft version, and in Vesper's Rust client whether you are in singleplayer or multiplayer. Never server addresses or accounts.</p>`
-    : '<p class="muted" style="margin:0">Discord Rich Presence is not set up in this build of Vesper.</p>';
+    : '<p class="muted" style="margin:0">Discord Rich Presence is not set up in this build of Vesper: it was made without a Discord application ID. Add the DISCORD_APP_ID variable to the repository and release again.</p>';
   const dcs = $('#dcs');
   if (dcs) dcs.onclick = (e) => { S.settings.discord_presence = !S.settings.discord_presence; e.target.classList.toggle('on', S.settings.discord_presence); e.target.setAttribute('aria-checked', S.settings.discord_presence); save(); };
   $('#data').onclick = () => invoke('open_data_folder');

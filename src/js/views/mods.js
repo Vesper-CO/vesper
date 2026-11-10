@@ -37,7 +37,7 @@ export async function render(el) {
 
 // ---------- Horizon's mod library (Rust instances) ----------
 
-const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built. The ones marked Built in are in your game and start switched off: turn each one on in the game under Options > Mods. The others are not in the build.';
+const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built. The ones marked Built in are in your game: switch each one on or off here (or in the game under Options > Mods). They start off, and a change applies the next time you start the game. The others are not in the build.';
 
 async function browseHorizon(inst) {
   const body = $('#body');
@@ -52,6 +52,7 @@ async function browseHorizon(inst) {
   $('#more').onclick = () => hsearch(inst, false);
   $('#hits').onclick = (e) => {
     const card = e.target.closest('[data-h]'); if (!card) return;
+    if (e.target.closest('[data-nt]')) return hNative(inst, card.dataset.h, e.target.closest('[data-nt]'));
     if (e.target.closest('[data-i]')) return hInstall(inst, card.dataset.h, e.target.closest('[data-i]'));
     openHorizon(inst, card.dataset.h);
   };
@@ -71,7 +72,7 @@ async function hsearch(inst, reset) {
 }
 
 const hButton = (h) => {
-  if (h.support === 'builtin') return '<button class="btn sm" disabled>Built in</button>';
+  if (h.support === 'builtin') return `<button class="switch ${h.on ? 'on' : ''}" data-nt="1" role="switch" aria-checked="${!!h.on}" aria-label="Turn on ${esc(h.name)}"></button>`;
   if (h.installed && !h.update) return '<button class="btn sm" disabled>Installed</button>';
   if (h.installed && h.update) return '<button class="btn primary sm" data-i="1">Update</button>';
   if (h.support === 'ok') return '<button class="btn primary sm" data-i="1">Install</button>';
@@ -90,6 +91,17 @@ function hpaint() {
       ${hButton(h)}</div>`).join('')
     : `<div class="empty">${H.native ? 'Nothing found. Try another search.' : 'Nothing found. Turn on "Show all native mods" to also see the ones that are not in the build.'}</div>`;
   $('#more').hidden = H.hits.length >= H.total;
+}
+
+async function hNative(inst, id, sw) {
+  sw.disabled = true;
+  try {
+    const on = await invoke('horizon_native_toggle', { instanceId: inst.id, id });
+    sw.classList.toggle('on', on); sw.setAttribute('aria-checked', on);
+    const h = H.hits.find((x) => x.id === id); if (h) h.on = on;
+    toast(on ? 'On. It loads the next time you start the game.' : 'Off. It stays off the next time you start the game.', 'ok');
+  } catch (e) { toast(errMsg(e), 'error'); }
+  sw.disabled = false;
 }
 
 async function hInstall(inst, id, btn) {
@@ -111,12 +123,14 @@ async function openHorizon(inst, id) {
       <div class="grow"><h2 style="margin:0">${esc(p.name)}</h2><p class="muted">${esc(p.summary)}</p>
         <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(p.downloads)} downloads</span>${p.version ? `<span class="chip">${esc(p.version)}</span>` : ''}${p.license ? `<span class="chip">${esc(p.license)}</span>` : ''}</div></div>
       <button class="btn" id="pg">Open page</button><span id="ib">${hButton(p)}</span><button class="icon-btn" id="x" aria-label="Close">&#10005;</button></div>
-    ${p.support === 'builtin' ? '<p class="muted" style="margin-top:12px">Built into your game. It starts switched off: turn it on in the game under Options > Mods.</p>' : p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
+    ${p.support === 'builtin' ? '<p class="muted" style="margin-top:12px">Built into your game. Switch it on or off with the switch above; a change applies the next time you start the game.</p>' : p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
     <div class="desc selectable" style="margin-top:16px">${md(p.description || p.summary)}</div>`;
   $('#x', m.el).onclick = m.close;
   $('#pg', m.el).onclick = () => invoke('open_url', { url: p.page });
   const ib = $('#ib [data-i]', m.el);
   if (ib) ib.onclick = () => hInstall(inst, id, ib);
+  const nt = $('#ib [data-nt]', m.el);
+  if (nt) nt.onclick = () => hNative(inst, id, nt);
 }
 
 async function browse(inst) {
@@ -218,7 +232,7 @@ async function openProject(pid) {
 
 async function installed(inst) {
   const body = $('#body');
-  body.innerHTML = `<div class="page-head" style="margin-top:16px"><p class="muted">Content in <b>${esc(inst.name)}</b>. Switch a mod off to keep the file but stop it loading.</p>
+  body.innerHTML = `<div class="page-head" style="margin-top:16px"><p class="muted">Content in <b>${esc(inst.name)}</b>. Switch a mod off to keep it but stop it loading (a change applies the next time the game starts).</p>
     <div class="actions"><button class="btn" id="upd">Update all</button><button class="btn" id="open">Open folder</button></div></div><div class="list" id="il">${skeleton(3, 'mod')}</div>`;
   $('#open').onclick = () => invoke('open_instance_folder', { id: inst.id });
   $('#upd').onclick = async (e) => {
@@ -229,18 +243,19 @@ async function installed(inst) {
   let items = [];
   try {
     items = await invoke('modrinth_installed', { instanceId: inst.id });
-    if (isRust(inst)) items = (await invoke('horizon_installed', { instanceId: inst.id })).concat(items);
+    if (isRust(inst)) items = (await invoke('horizon_builtin', { instanceId: inst.id })).concat(await invoke('horizon_installed', { instanceId: inst.id }), items);
   } catch (e) { $('#il').innerHTML = `<div class="empty">${esc(errMsg(e))}</div>`; return; }
   const kindName = { mod: 'Mod', resourcepack: 'Resource pack', shader: 'Shader' };
   $('#il').innerHTML = items.length ? items.map((i, n) => `<div class="mod" style="grid-template-columns:44px 1fr auto auto;cursor:default">
       ${i.icon ? `<img class="icon" style="width:44px;height:44px" alt="" src="${esc(i.icon)}">` : '<div class="icon" style="width:44px;height:44px"></div>'}
-      <div style="min-width:0"><div class="t">${esc(i.title)}</div><small class="muted">${i.source === 'horizon' ? 'Horizon mod' : kindName[i.kind]}${i.version_name ? ', ' + esc(i.version_name) : ''}</small></div>
+      <div style="min-width:0"><div class="t">${esc(i.title)}</div><small class="muted">${i.source === 'native' ? 'Built-in mod' : i.source === 'horizon' ? 'Horizon mod' : kindName[i.kind]}${i.version_name ? ', ' + esc(i.version_name) : ''}</small></div>
       <button class="switch ${i.enabled ? 'on' : ''}" data-n="${n}" data-a="toggle" role="switch" aria-checked="${i.enabled}" aria-label="Enabled"></button>
-      <button class="btn sm danger" data-n="${n}" data-a="rm">Remove</button></div>`).join('')
+      ${i.source === 'native' ? '<span class="chip">Built in</span>' : `<button class="btn sm danger" data-n="${n}" data-a="rm">Remove</button>`}</div>`).join('')
     : '<div class="empty">Nothing installed yet. Browse the tabs above to add mods, resource packs or shaders.</div>';
   $('#il').onclick = async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return; const i = items[+b.dataset.n];
     try {
+      if (b.dataset.a === 'toggle' && i.source === 'native') { const on = await invoke('horizon_native_toggle', { instanceId: inst.id, id: i.project_id }); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); return; }
       if (b.dataset.a === 'toggle' && i.source === 'horizon') { const on = await invoke('horizon_toggle', { instanceId: inst.id, id: i.project_id }); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); return; }
       if (b.dataset.a === 'rm' && i.source === 'horizon') { await invoke('horizon_remove', { instanceId: inst.id, id: i.project_id }); return installed(inst); }
       if (b.dataset.a === 'toggle') { const on = await invoke('modrinth_toggle', { instanceId: inst.id, kind: i.kind, filename: i.filename }); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); }

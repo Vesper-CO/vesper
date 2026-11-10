@@ -80,19 +80,21 @@ fn client_exe(dir: &Path) -> PathBuf {
 }
 fn prepare_exe(dir: &Path) -> PathBuf { dir.join("horizon-prepare.exe") }
 
-/// Ids of the native mods compiled into the installed Vesper build. The build workflow writes them to
-/// `vesper-mods.json` beside the client; an older build has no such file, so none.
-pub fn builtin_ids() -> Vec<String> {
+/// The native mods compiled into the installed Vesper build, as the build workflow listed them in
+/// `vesper-mods.json` beside the client (id, name, version, summary, icon). An older build has no
+/// such file, so none.
+pub fn builtin_mods() -> Vec<serde_json::Value> {
     let dir = build_dir(&load_state().build);
     std::fs::read(dir.join("vesper-mods.json"))
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-        .and_then(|v| {
-            v.get("mods")
-                .and_then(|m| m.as_array())
-                .map(|a| a.iter().filter_map(|m| m.get("id").and_then(|i| i.as_str()).map(String::from)).collect())
-        })
+        .and_then(|v| v.get("mods").and_then(|m| m.as_array().cloned()))
         .unwrap_or_default()
+}
+
+/// Ids of those mods.
+pub fn builtin_ids() -> Vec<String> {
+    builtin_mods().iter().filter_map(|m| m.get("id").and_then(|i| i.as_str()).map(String::from)).collect()
 }
 
 /// Whether the installed client shows its own Discord presence (singleplayer, multiplayer, dimension...).

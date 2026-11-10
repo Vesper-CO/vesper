@@ -241,17 +241,25 @@ fn with_off_lines(text: &str, ids: &[String]) -> String {
     out
 }
 
+fn seen_path(inst: &str) -> PathBuf { paths::instance_dir(inst).join("vesper-native-seen.json") }
+fn read_seen(inst: &str) -> Vec<String> {
+    std::fs::read(seen_path(inst)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+fn write_seen(inst: &str, seen: &[String]) -> Result<()> {
+    std::fs::write(seen_path(inst), serde_json::to_vec(seen)?)?;
+    Ok(())
+}
+
 /// Native mods compiled into the game are on in the game until switched off. Vesper starts them off:
 /// the first time an instance meets a built-in mod it writes `mod.<id>:false` for it, once, and
-/// remembers it did. After that the choice is the player's, made in the game under Options > Mods.
-/// A mod the player already has a line for (on or off) is left as it is.
+/// remembers it did. After that the choice is the player's, made here or in the game under
+/// Options > Mods. A mod the player already has a line for (on or off) is left as it is.
 pub fn start_builtin_off(inst: &str) -> Result<()> {
     let ids = crate::rust::builtin_ids();
     if ids.is_empty() {
         return Ok(());
     }
-    let seen_path = paths::instance_dir(inst).join("vesper-native-seen.json");
-    let mut seen: Vec<String> = std::fs::read(&seen_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let mut seen = read_seen(inst);
     let fresh: Vec<String> = ids.into_iter().filter(|i| !seen.contains(i)).collect();
     if fresh.is_empty() {
         return Ok(());
@@ -263,7 +271,34 @@ pub fn start_builtin_off(inst: &str) -> Result<()> {
         std::fs::write(settings_path(inst), out)?;
     }
     seen.extend(fresh);
-    std::fs::write(&seen_path, serde_json::to_vec(&seen)?)?;
+    write_seen(inst, &seen)
+}
+
+/// Whether a built-in mod is on for the instance: its line says so, and with no line yet it is off
+/// until the first launch writes one (the game itself would treat a missing line as on).
+fn native_on(inst: &str, id: &str) -> bool {
+    let text = std::fs::read_to_string(settings_path(inst)).unwrap_or_default();
+    let k = key(id);
+    match text.lines().map(str::trim).find_map(|l| l.strip_prefix(k.as_str())) {
+        Some(v) => v.trim() == "true",
+        None => read_seen(inst).iter().any(|s| s == id),
+    }
+}
+
+/// Writes `mod.<id>:true` or `:false` and keeps every other line (the game's key choices, content mods).
+fn set_native(inst: &str, id: &str, on: bool) -> Result<()> {
+    let k = key(id);
+    let text = std::fs::read_to_string(settings_path(inst)).unwrap_or_default();
+    let mut lines: Vec<String> = text.lines().filter(|l| !l.trim_start().starts_with(&k)).map(String::from).collect();
+    lines.push(format!("{k}{on}"));
+    std::fs::create_dir_all(paths::game_dir(inst))?;
+    std::fs::write(settings_path(inst), lines.join("\n") + "\n")?;
+    // The player has decided: the first-launch step must not touch it again.
+    let mut seen = read_seen(inst);
+    if !seen.iter().any(|s| s == id) {
+        seen.push(id.to_string());
+        write_seen(inst, &seen)?;
+    }
     Ok(())
 }
 
@@ -379,6 +414,15 @@ pub async fn horizon_search(instance_id: String, query: String, show_native: boo
         .take(PAGE)
         .map(|p| hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked))
         .collect();
+    let hits: Vec<Value> = hits
+        .into_iter()
+        .map(|mut h| {
+            if h["support"] == "builtin" {
+                h["on"] = json!(native_on(&instance_id, h["id"].as_str().unwrap_or("")));
+            }
+            h
+        })
+        .collect();
     Ok(json!({ "hits": hits, "total": total }))
 }
 
@@ -393,6 +437,9 @@ pub async fn horizon_project(instance_id: String, id: String) -> CmdResult<Value
     v["license"] = json!(p.license);
     v["source"] = json!(p.source);
     v["page"] = json!(format!("{SITE}/{}", p.id));
+    if v["support"] == "builtin" {
+        v["on"] = json!(native_on(&instance_id, &p.id));
+    }
     Ok(v)
 }
 
@@ -403,6 +450,34 @@ pub async fn horizon_install(instance_id: String, id: String) -> CmdResult<Strin
     let p = projects.iter().find(|p| p.id == id).ok_or_else(|| anyhow!("That mod is not in the library"))?;
     install_one(&instance_id, &inst.mc_version, p, &revoked).await?;
     Ok(p.name.clone())
+}
+
+/// The native mods built into the installed client, with whether each is on for this instance.
+#[tauri::command]
+pub fn horizon_builtin(instance_id: String) -> CmdResult<Vec<Value>> {
+    paths::safe_id(&instance_id)?;
+    Ok(crate::rust::builtin_mods()
+        .into_iter()
+        .map(|m| {
+            let id = m["id"].as_str().unwrap_or("").to_string();
+            json!({
+                "project_id": id, "title": m["name"], "version_name": m["version"], "icon": m["icon"],
+                "summary": m["summary"], "kind": "mod", "source": "native", "enabled": native_on(&instance_id, &id),
+            })
+        })
+        .collect())
+}
+
+/// Switches a built-in mod on or off for the instance (takes effect the next time the game starts).
+#[tauri::command]
+pub fn horizon_native_toggle(instance_id: String, id: String) -> CmdResult<bool> {
+    paths::safe_id(&instance_id)?;
+    if !crate::rust::builtin_ids().contains(&id) {
+        return Err(anyhow!("That mod is not built into this game").into());
+    }
+    let on = !native_on(&instance_id, &id);
+    set_native(&instance_id, &id, on)?;
+    Ok(on)
 }
 
 #[tauri::command]

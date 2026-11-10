@@ -49,6 +49,20 @@ jobs:
             exit 1
           fi
 
+      - name: Discord application id
+        shell: bash
+        env:
+          RAW: ${{ vars.DISCORD_APP_ID || secrets.DISCORD_APP_ID }}
+        run: |
+          id=$(printf '%s' "$RAW" | tr -dc '0-9')
+          if [ ${#id} -lt 17 ] || [ ${#id} -gt 20 ]; then
+            echo "::warning::DISCORD_APP_ID is missing or not a Discord application id (17-20 digits). This build has no Discord Rich Presence. Add it under Settings > Secrets and variables > Actions > Variables, then build again."
+            id=""
+          else
+            echo "Discord Rich Presence is on in this build (application id ${id:0:4}...)."
+          fi
+          echo "VESPER_DISCORD_APP_ID=$id" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: npm install
 
@@ -57,8 +71,6 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Vesper's Discord application id (public). Without it Discord Rich Presence is off.
-          VESPER_DISCORD_APP_ID: ${{ vars.DISCORD_APP_ID }}
 
       - name: Write latest.json
         shell: bash

@@ -33,8 +33,10 @@ const IPC_DIR_ENV: &str = "VESPER_DISCORD_IPC_DIR";
 pub fn valid_id(id: &str) -> bool {
     (17..=20).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_digit())
 }
+/// The application id with any stray spaces or newline from the repository variable removed.
+pub fn app_id() -> &'static str { APP_ID.trim() }
 /// Whether this build of Vesper has a Discord application to show presence under.
-pub fn available() -> bool { valid_id(APP_ID) }
+pub fn available() -> bool { valid_id(app_id()) }
 
 fn now_secs() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
 
@@ -299,7 +301,7 @@ pub fn start(enabled: bool) {
         return;
     }
     let model = Model { enabled, page: page_label("home").into(), launched: now_secs(), playing: None };
-    let _ = std::thread::Builder::new().name("discord-presence".into()).spawn(move || run(rx, APP_ID.to_string(), model));
+    let _ = std::thread::Builder::new().name("discord-presence".into()).spawn(move || run(rx, app_id().to_string(), model));
 }
 
 pub fn set_enabled(on: bool) { send(Msg::Enabled(on)) }

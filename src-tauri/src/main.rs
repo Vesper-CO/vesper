@@ -116,6 +116,8 @@ fn main() {
             horizon_mods::horizon_project,
             horizon_mods::horizon_install,
             horizon_mods::horizon_installed,
+            horizon_mods::horizon_builtin,
+            horizon_mods::horizon_native_toggle,
             horizon_mods::horizon_toggle,
             horizon_mods::horizon_remove,
             horizon_mods::horizon_update_all,
