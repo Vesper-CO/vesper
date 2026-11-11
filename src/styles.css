@@ -194,11 +194,11 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .hud-el .arm { display: flex; align-items: center; gap: .35em; } .hud-el .arm i { display: inline-block; border-radius: 1px; }
 .rb { animation: hud-rb 4s linear infinite; }
 @keyframes hud-rb { 0% { color: hsl(0 90% 62%); } 17% { color: hsl(60 90% 62%); } 33% { color: hsl(120 90% 62%); } 50% { color: hsl(180 90% 62%); } 67% { color: hsl(240 90% 66%); } 83% { color: hsl(300 90% 66%); } 100% { color: hsl(360 90% 62%); } }
-.hud-panel { display: grid; gap: 16px; }
-.hud-sec { display: grid; gap: 10px; } .hud-sec h4 { font-size: 13px; color: var(--muted); font-weight: 650; text-transform: uppercase; letter-spacing: .05em; }
+.hud-panels { display: grid; gap: 14px; }
+.hud-card { display: grid; gap: 12px; padding: 16px 18px; } .hud-card h3 { font-size: 15px; } .hud-card h4 { font-size: 13px; color: var(--muted); font-weight: 650; text-transform: uppercase; letter-spacing: .05em; }
 .hud-list { display: grid; gap: 4px; }
 .hud-item { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px 5px 12px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
 .hud-item:hover { background: var(--glass2); } .hud-item.sel { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .switch.sm { transform: scale(.78); transform-origin: right center; }
 input[type=color] { width: 100%; height: 34px; padding: 2px; border-radius: 9px; border: 1px solid var(--line); background: var(--glass); cursor: pointer; }
-.hud-panel code { background: var(--glass2); padding: 0 5px; border-radius: 5px; }
+.hud-panels code { background: var(--glass2); padding: 0 5px; border-radius: 5px; }

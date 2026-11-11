@@ -18,6 +18,8 @@ import java.util.function.Consumer;
 /** Lays out and draws every enabled element. Positions are fractions of the free space, like the launcher's preview. */
 final class HudRenderer {
     private static final String[] ORDER = { "fps", "cps", "ping", "coords", "direction", "memory", "clock", "keystrokes", "armor", "potions" };
+    /** Drawn by the universal agent (see /hud-agent) whenever it is running, so the add-on skips them. */
+    private static final java.util.Set<String> UNIVERSAL = java.util.Set.of("fps", "cps", "memory", "clock", "keystrokes");
     private static final ArrayDeque<Long> LEFT = new ArrayDeque<>(), RIGHT = new ArrayDeque<>();
     private static boolean wasLeft, wasRight;
 
@@ -30,7 +32,9 @@ final class HudRenderer {
         trackClicks(mc);
         if (!cfg.enabled || mc.player == null || mc.options.hudHidden || mc.getDebugHud().shouldShowDebugHud()) return;
         int sw = mc.getWindow().getScaledWidth(), sh = mc.getWindow().getScaledHeight();
+        boolean agent = System.getProperty("vesper.hud.agent") != null;
         for (String id : ORDER) {
+            if (agent && UNIVERSAL.contains(id)) continue;
             HudConfig.Element e = cfg.elements.get(id);
             if (e == null || !e.enabled) continue;
             Block b = build(id, e, mc, ctx);

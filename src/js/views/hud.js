@@ -25,7 +25,7 @@ export async function render(el) {
         <div class="card" style="margin-top:14px"><h3>Style presets</h3><p class="muted" style="margin:0">Applies colours and shape to every element. Positions and on/off stay as they are.</p>
           <div class="chips" id="presets">${Object.keys(PRESETS).map((n) => `<button class="btn sm" data-preset="${esc(n)}">${esc(n)}</button>`).join('')}</div></div>
       </div>
-      <div class="card hud-panel" id="panel"></div>
+      <div class="hud-panels" id="panel"></div>
     </div></div>`;
   drawStage(); drawPanel();
   new ResizeObserver(drawStage).observe($('#stage'));
@@ -121,21 +121,26 @@ const col = (k, label, val) => `<label class="field"><span>${label}</span><input
 function drawPanel() {
   const p = $('#panel'); if (!p) return;
   const m = meta(sel), c = H.elements[sel], n = (v) => String(+v.toFixed(2));
-  p.innerHTML = `<div class="hud-sec">${sw('master', H.enabled, '<b>Show the HUD in game</b>')}${rng('gscale', 'Overall size', 0.5, 2, 0.05, H.scale, n)}</div>
-    <div class="hud-sec"><h4>Elements</h4><div class="hud-list">${ELEMENTS.map((e) => `<div class="hud-item ${e.id === sel ? 'sel' : ''}" data-sel="${e.id}"><span>${esc(e.name)}</span><button class="switch sm ${H.elements[e.id].enabled ? 'on' : ''}" data-en="${e.id}" role="switch" aria-checked="${H.elements[e.id].enabled}" aria-label="Show ${esc(e.name)}"></button></div>`).join('')}</div></div>
-    <div class="hud-sec"><h4>${esc(m.name)}</h4>
+  const item = (e) => `<div class="hud-item ${e.id === sel ? 'sel' : ''}" data-sel="${e.id}"><span>${esc(e.name)}</span><button class="switch sm ${H.elements[e.id].enabled ? 'on' : ''}" data-en="${e.id}" role="switch" aria-checked="${H.elements[e.id].enabled}" aria-label="Show ${esc(e.name)}"></button></div>`;
+  // Each group of settings is its own small card, so no single card is tall.
+  p.innerHTML = `<div class="card hud-card"><h3>Display</h3>${sw('master', H.enabled, 'Show the HUD in game')}${rng('gscale', 'Overall size', 0.5, 2, 0.05, H.scale, n)}</div>
+    <div class="card hud-card"><h3>Elements</h3><div class="hud-list">${ELEMENTS.filter((e) => !e.addon).map(item).join('')}</div></div>
+    <div class="card hud-card"><h3>Fabric add-on</h3><p class="muted" style="margin:0">These need data from inside the game, so they only show with the optional add-on (Fabric, Minecraft 1.21.4).</p>
+      <div class="hud-list">${ELEMENTS.filter((e) => e.addon).map(item).join('')}</div></div>
+    <div class="card hud-card"><h3>${esc(m.name)}: text</h3>
+      ${m.addon ? '<p class="muted" style="margin:0">Needs the Fabric add-on to appear in game.</p>' : ''}
       ${m.special ? '' : `<label class="field"><span>Text (<code>{v}</code> is the value)</span><input type="text" data-k="template" maxlength="60" value="${esc(c.template)}"></label>`}
       <div class="row"><div class="grow">${col('labelColor', m.special && m.id !== 'potions' ? 'Key / icon colour' : 'Label colour', c.labelColor)}</div><div class="grow">${col('valueColor', 'Value colour', c.valueColor)}</div></div>
       <div class="row" style="gap:18px">${sw('rainbow', c.rainbow, 'Rainbow text')}${sw('shadow', c.shadow, 'Text shadow')}</div>
       ${rng('scale', 'Size', 0.5, 3, 0.05, c.scale, n)}</div>
-    <div class="hud-sec"><h4>Background</h4>${col('bg', 'Colour', c.bg)}
+    <div class="card hud-card"><h3>${esc(m.name)}: background</h3>${col('bg', 'Colour', c.bg)}
       ${rng('bgOpacity', 'Opacity', 0, 1, 0.01, c.bgOpacity, pct)}
       <div class="row"><button class="btn sm" data-q="clear">Fully transparent</button><button class="btn sm" data-q="solid">Solid</button></div></div>
-    <div class="hud-sec"><h4>Border and shape</h4>${col('border', 'Border colour', c.border)}
+    <div class="card hud-card"><h3>${esc(m.name)}: border and shape</h3>${col('border', 'Border colour', c.border)}
       ${rng('borderOpacity', 'Border opacity', 0, 1, 0.01, c.borderOpacity, pct)}${rng('borderWidth', 'Border width', 0, 4, 0.5, c.borderWidth, n)}
       ${rng('radius', 'Corner roundness', 0, 12, 1, c.radius, n)}${rng('padding', 'Padding', 0, 12, 1, c.padding, n)}</div>
-    <div class="row"><button class="btn sm" data-q="all">Use this style for all</button><button class="btn sm" data-q="reset">Reset ${esc(m.name)}</button></div>
-    <p class="muted" style="margin:0">Needs the HUD mod: edit an instance (Fabric or Quilt) and turn on In-game HUD.</p>`;
+    <div class="card hud-card"><h3>Copy and reset</h3><div class="row"><button class="btn sm" data-q="all">Use this style for all</button><button class="btn sm" data-q="reset">Reset ${esc(m.name)}</button></div>
+      <p class="muted" style="margin:0">Works in every Minecraft 1.13+ instance on any loader: turn on <b>HUD</b> on an instance card.</p></div>`;
 }
 
 function changed() { drawStage(); saveSoon(); }

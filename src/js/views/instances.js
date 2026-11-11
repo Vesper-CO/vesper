@@ -26,7 +26,7 @@ export async function render(el) {
       <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span>${i.loader === 'rust' ? '<span class="chip">No Java</span>' : `<span class="chip">${ramLabel(i.ram_mb)}</span>`}</div>
       <small class="muted">${ago(i.last_played)}</small>
       <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button><button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button>
-        ${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="boost" data-id="${i.id}" title="Install performance mods">Boost FPS</button><button class="btn sm" data-a="hud" data-id="${i.id}" title="Vesper HUD mod: FPS, CPS, keystrokes...">HUD: ${i.hud ? 'on' : 'off'}</button>`}</div>
+        ${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="boost" data-id="${i.id}" title="Install performance mods">Boost FPS</button><button class="btn sm" data-a="hud" data-id="${i.id}" title="In-game HUD: FPS, CPS, keystrokes... (works on every loader)">HUD: ${i.hud ? 'on' : 'off'}</button>`}</div>
     </div>`).join('');
   grid.onclick = async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
@@ -42,8 +42,15 @@ export async function render(el) {
         toast(`Installed ${r.installed.length} mod${r.installed.length === 1 ? '' : 's'}${r.unavailable.length ? `. Not available for ${inst.mc_version}: ${r.unavailable.join(', ')}` : ''}`, 'ok');
       }
       if (b.dataset.a === 'hud') {
-        if (inst.hud) { await invoke('hud_remove', { id }); toast('In-game HUD turned off for this instance', 'ok'); }
-        else { toast('Installing the in-game HUD...'); await invoke('hud_install', { id }); toast('In-game HUD installed. Style it on the In-game HUD page.', 'ok'); }
+        if (inst.hud) { await invoke('hud_set', { id, enabled: false }); toast('In-game HUD turned off for this instance', 'ok'); }
+        else {
+          await invoke('hud_set', { id, enabled: true });
+          toast('In-game HUD turned on. Style it on the In-game HUD page.', 'ok');
+          if ((inst.loader === 'fabric' || inst.loader === 'quilt') && inst.mc_version === '1.21.4'
+            && await ask('Also install the Fabric add-on? It adds coordinates, ping, direction, armor and potion effects.', 'Install')) {
+            toast('Installing the add-on...'); await invoke('hud_install', { id }); toast('Add-on installed', 'ok');
+          }
+        }
         await refreshInstances(); render(el);
       }
       if (b.dataset.a === 'del' && await ask(`Delete "${inst.name}" with all its worlds and mods? This cannot be undone.`, 'Delete')) { await invoke('delete_instance', { id }); toast('Instance deleted', 'ok'); render(el); }

@@ -1,0 +1,10 @@
+{ "version": 1, "enabled": true, "scale": 1,
+  "elements": {
+    "fps":        { "enabled": true, "x": 0.01, "y": 0.02, "template": "FPS: {v}" },
+    "cps":        { "enabled": true, "x": 0.01, "y": 0.10, "bgOpacity": 0, "borderOpacity": 0, "radius": 0 },
+    "frametime":  { "enabled": true, "x": 0.01, "y": 0.18, "bg": "#05020f", "bgOpacity": 0.65, "border": "#ff3df2", "borderOpacity": 0.9, "labelColor": "#3dfcff", "valueColor": "#ff7af5", "radius": 3 },
+    "memory":     { "enabled": true, "x": 0.01, "y": 0.26, "rainbow": true },
+    "clock":      { "enabled": true, "x": 0.5, "y": 0.01, "bg": "#ffffff", "bgOpacity": 0.12, "border": "#ffffff", "borderOpacity": 0.4, "radius": 7, "labelColor": "#e8eeff" },
+    "session":    { "enabled": true, "x": 0.99, "y": 0.02, "bg": "#ffffff", "bgOpacity": 0.62, "labelColor": "#1f64d6", "valueColor": "#14213d", "shadow": false, "border": "#1f64d6", "borderOpacity": 0.35, "radius": 12, "padding": 6, "scale": 1.3 },
+    "keystrokes": { "enabled": true, "x": 0.01, "y": 0.72 }
+  } }

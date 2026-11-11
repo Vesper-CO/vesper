@@ -78,6 +78,21 @@ pub fn java_major_for(mc: &str) -> u32 {
     }
 }
 
+/// Minecraft 1.13 and newer (including year-style versions such as 26.3) use LWJGL 3 and GLFW; older ones use
+/// LWJGL 2, which the HUD agent does not hook.
+pub fn mc_has_glfw(mc: &str) -> bool {
+    let base = mc.split('-').next().unwrap_or("");
+    let nums: Vec<u32> = match base.split('.').map(|p| p.parse().ok()).collect::<Option<Vec<_>>>() {
+        Some(n) => n,
+        None => return true, // snapshots such as 24w14a are all recent
+    };
+    match nums.as_slice() {
+        [1, minor, ..] => *minor >= 13,
+        [major, ..] => *major >= 26,
+        [] => false,
+    }
+}
+
 // ---------- planning ----------
 
 pub fn resolve_profile(profile: &str, total_mb: u64) -> &'static str {
@@ -163,6 +178,12 @@ mod tests {
         assert_eq!(java_major_for("1.21.4"), 21);
         assert_eq!(java_major_for("26.3"), 25);
         assert_eq!(java_major_for("26.4-snapshot-8"), 25);
+    }
+
+    #[test]
+    fn glfw_versions() {
+        assert!(!mc_has_glfw("1.8.9") && !mc_has_glfw("1.12.2"));
+        assert!(mc_has_glfw("1.13") && mc_has_glfw("1.21.4") && mc_has_glfw("26.3") && mc_has_glfw("24w14a") && mc_has_glfw("26.4-snapshot-8"));
     }
 
     #[test]

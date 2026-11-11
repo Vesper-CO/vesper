@@ -140,7 +140,7 @@ fn main() {
             hud::get_hud,
             hud::save_hud,
             hud::hud_install,
-            hud::hud_remove,
+            hud::hud_set,
         ])
         .run(tauri::generate_context!())
         .expect("Vesper failed to start");

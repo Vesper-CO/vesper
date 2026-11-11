@@ -2,17 +2,21 @@
 // Positions are fractions: x = 0 puts the element against the left edge of the screen, 1 against the
 // right edge; y likewise for top and bottom. Sizes are in Minecraft GUI units, so they scale with the
 // player's GUI scale. The mod reads the same names, so keep the two in sync (hud-mod/.../HudConfig.java).
+// `addon: true` marks elements that need data from inside the game (coordinates, ping...). The universal overlay
+// cannot see those, so they only appear with the optional Fabric add-on.
 export const ELEMENTS = [
   { id: 'fps', name: 'FPS', tpl: 'FPS: {v}', sample: '144', x: 0.01, y: 0.02, on: true },
   { id: 'cps', name: 'CPS', tpl: 'CPS: {v}', sample: '8 | 5', x: 0.01, y: 0.1, on: true },
-  { id: 'ping', name: 'Ping', tpl: 'Ping: {v}', sample: '32 ms', x: 0.01, y: 0.18, on: true },
-  { id: 'coords', name: 'Coordinates', tpl: 'XYZ: {v}', sample: '120 / 64 / -340', x: 0.01, y: 0.26, on: true },
-  { id: 'direction', name: 'Direction', tpl: 'Facing: {v}', sample: 'North', x: 0.01, y: 0.34, on: false },
+  { id: 'frametime', name: 'Frame time', tpl: 'Frame: {v}', sample: '6.9 ms', x: 0.01, y: 0.5, on: false },
   { id: 'memory', name: 'Memory', tpl: 'RAM: {v}', sample: '1.4 / 4.0 GB', x: 0.01, y: 0.42, on: false },
   { id: 'clock', name: 'Clock', tpl: '{v}', sample: '21:45', x: 0.5, y: 0.01, on: false },
+  { id: 'session', name: 'Playtime', tpl: 'Playtime: {v}', sample: '42:10', x: 0.01, y: 0.58, on: false },
   { id: 'keystrokes', name: 'Keystrokes', tpl: '', sample: '', x: 0.01, y: 0.72, on: true, special: true },
-  { id: 'armor', name: 'Armor status', tpl: '', sample: '', x: 0.96, y: 0.74, on: true, special: true },
-  { id: 'potions', name: 'Potion effects', tpl: '', sample: '', x: 0.99, y: 0.02, on: false, special: true },
+  { id: 'ping', name: 'Ping', tpl: 'Ping: {v}', sample: '32 ms', x: 0.01, y: 0.18, on: true, addon: true },
+  { id: 'coords', name: 'Coordinates', tpl: 'XYZ: {v}', sample: '120 / 64 / -340', x: 0.01, y: 0.26, on: true, addon: true },
+  { id: 'direction', name: 'Direction', tpl: 'Facing: {v}', sample: 'North', x: 0.01, y: 0.34, on: false, addon: true },
+  { id: 'armor', name: 'Armor status', tpl: '', sample: '', x: 0.96, y: 0.74, on: true, special: true, addon: true },
+  { id: 'potions', name: 'Potion effects', tpl: '', sample: '', x: 0.99, y: 0.02, on: false, special: true, addon: true },
 ];
 
 export const LOOK = { scale: 1, labelColor: '#c9bfff', valueColor: '#ffffff', rainbow: false, shadow: true, bg: '#0b0b17', bgOpacity: 0.55, border: '#8f7cff', borderOpacity: 0.35, borderWidth: 1, radius: 4, padding: 4 };

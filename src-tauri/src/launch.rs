@@ -192,6 +192,12 @@ pub async fn play(app: AppHandle, state: State<'_, Running>, id: String) -> CmdR
         "-Dlog4j2.formatMsgNoLookups=true".into(), // Log4Shell mitigation for older versions
     ];
     args.extend(plan.flags.iter().cloned());
+    if inst.hud {
+        match hud::agent_args(&id, &inst.mc_version, &java) {
+            Ok(a) => args.extend(a),
+            Err(e) => log(&app, &id, &format!("[Vesper] The in-game HUD was not started: {e:#}"), "err"),
+        }
+    }
     args.extend(inst.jvm_args.split_whitespace().map(String::from));
     if v["arguments"]["jvm"].is_array() {
         args.extend(expand(&v["arguments"]["jvm"], &vars));

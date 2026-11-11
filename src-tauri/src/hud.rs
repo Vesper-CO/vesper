@@ -6,12 +6,84 @@ use crate::{download::{client, download_one, Job}, error::CmdResult, instances, 
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
 /// Minecraft versions a HUD mod build is published for.
 pub const HUD_VERSIONS: &[&str] = &["1.21.4"];
 const RELEASE: &str = "https://github.com/Vesper-CO/vesper/releases/download/hud-latest";
 const MAX_CONFIG: usize = 256 * 1024;
+
+/// The universal HUD agent (see /hud-agent), built into the launcher so it needs no download.
+const AGENT_JAR: &[u8] = include_bytes!("../resources/vesper-hud-agent.jar");
+
+/// Write the agent jar to disk (named by its hash, so a new launcher version never reuses a stale one).
+fn agent_path() -> Result<PathBuf> {
+    let dir = paths::root().join("agent");
+    let path = dir.join(format!("vesper-hud-agent-{}.jar", &hex::encode(Sha256::digest(AGENT_JAR))[..12]));
+    if !path.exists() {
+        std::fs::create_dir_all(&dir)?;
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                if e.file_name().to_string_lossy().starts_with("vesper-hud-agent-") {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
+        std::fs::write(&path, AGENT_JAR).context("Could not write the HUD agent")?;
+    }
+    Ok(path)
+}
+
+/// Mojang's trimmed Java runtimes list their modules in a `release` file. Agents need `java.instrument`;
+/// without it the JVM refuses to start, so we check first. (Java 8 has no module list and always has it.)
+fn runtime_has_instrument(java: &Path) -> bool {
+    let release = java.parent().and_then(|p| p.parent()).map(|p| p.join("release"));
+    match release.and_then(|r| std::fs::read_to_string(r).ok()) {
+        Some(text) => match text.lines().find(|l| l.starts_with("MODULES=")) {
+            Some(m) => m.contains("java.instrument"),
+            None => true,
+        },
+        None => true,
+    }
+}
+
+/// JVM arguments that start the HUD agent for an instance (called by the launcher before starting the game).
+pub fn agent_args(id: &str, mc_version: &str, java: &Path) -> Result<Vec<String>> {
+    if !crate::perf::mc_has_glfw(mc_version) {
+        return Err(anyhow!("the in-game HUD needs Minecraft 1.13 or newer"));
+    }
+    if !runtime_has_instrument(java) {
+        return Err(anyhow!("this Java runtime cannot load agents (it has no java.instrument module)"));
+    }
+    let game = paths::game_dir(id);
+    Ok(vec![
+        format!("-javaagent:{}", agent_path()?.display()),
+        format!("-Dvesper.hud.config={}", game.join("config").join("vesper-hud.json").display()),
+        format!("-Dvesper.hud.options={}", game.join("options.txt").display()),
+    ])
+}
+
+/// Turn the in-game HUD on or off for an instance. It works on every Java loader (vanilla, Fabric, Quilt,
+/// Forge, NeoForge); turning it off also removes the optional Fabric add-on.
+#[tauri::command]
+pub fn hud_set(id: String, enabled: bool) -> CmdResult<()> {
+    let mut inst = instances::load(&id)?;
+    if enabled {
+        if inst.loader == "rust" {
+            return Err(anyhow!("Rust instances do not use Java, so the in-game HUD is not available for them yet.").into());
+        }
+        if !crate::perf::mc_has_glfw(&inst.mc_version) {
+            return Err(anyhow!("The in-game HUD needs Minecraft 1.13 or newer.").into());
+        }
+        sync(&id)?;
+    } else {
+        remove_old_jars(&paths::game_dir(&id).join("mods"));
+    }
+    inst.hud = enabled;
+    instances::save(&inst)?;
+    Ok(())
+}
 
 fn hud_file() -> std::path::PathBuf { paths::root().join("hud.json") }
 
@@ -54,7 +126,8 @@ fn remove_old_jars(mods: &std::path::Path) {
     }
 }
 
-/// Install the HUD mod (and Fabric API, which it needs) into a Fabric or Quilt instance.
+/// Install the optional Fabric add-on (and Fabric API, which it needs). It adds the elements that need data from
+/// inside the game: coordinates, ping, direction, armor and potion effects.
 #[tauri::command]
 pub async fn hud_install(app: AppHandle, id: String) -> CmdResult<String> {
     let mut inst = instances::load(&id)?;
@@ -91,12 +164,3 @@ pub async fn hud_install(app: AppHandle, id: String) -> CmdResult<String> {
     Ok(name)
 }
 
-/// Turn the HUD off for an instance: the mod file is removed, the settings file stays.
-#[tauri::command]
-pub fn hud_remove(id: String) -> CmdResult<()> {
-    let mut inst = instances::load(&id)?;
-    remove_old_jars(&paths::game_dir(&id).join("mods"));
-    inst.hud = false;
-    instances::save(&inst)?;
-    Ok(())
-}

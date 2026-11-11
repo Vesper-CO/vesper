@@ -114,7 +114,7 @@ pub fn update_instance(inst: Instance) -> CmdResult<Instance> {
     if !crate::perf::PROFILES.contains(&new.perf.as_str()) {
         new.perf = d_perf();
     }
-    new.hud = old.hud; // changed only through hud_install / hud_remove
+    new.hud = old.hud; // changed only through hud_set / hud_install
     if new.loader == "rust" {
         new.mc_version = crate::rust::MC_VERSION.into();
         new.loader_version.clear();
