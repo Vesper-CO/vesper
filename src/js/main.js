@@ -6,10 +6,11 @@ import { startBackground } from './background.js';
 import * as home from './views/home.js';
 import * as instances from './views/instances.js';
 import * as mods from './views/mods.js';
+import * as hud from './views/hud.js';
 import * as accounts from './views/accounts.js';
 import * as settings from './views/settings.js';
 
-registerViews({ home, instances, mods, accounts, settings });
+registerViews({ home, instances, mods, hud, accounts, settings });
 // The background is decoration: if it ever fails, the app must still work.
 try { startBackground(document.getElementById('bg')); } catch (e) { console.warn('background disabled', e); }
 

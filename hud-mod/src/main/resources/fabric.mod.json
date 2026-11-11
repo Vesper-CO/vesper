@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "vesper-hud",
+  "version": "${version}",
+  "name": "Vesper HUD",
+  "description": "FPS, CPS, ping, coordinates, keystrokes, armor and potion overlays, styled from the Vesper launcher.",
+  "authors": ["Vesper"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.vesper.hud.VesperHudMod"] },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

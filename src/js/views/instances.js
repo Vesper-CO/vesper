@@ -25,7 +25,8 @@ export async function render(el) {
         <button class="icon-btn" data-a="del" data-id="${i.id}" title="Delete">${ICON.trash}</button></div></div>
       <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span>${i.loader === 'rust' ? '<span class="chip">No Java</span>' : `<span class="chip">${ramLabel(i.ram_mb)}</span>`}</div>
       <small class="muted">${ago(i.last_played)}</small>
-      <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button><button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button></div>
+      <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button><button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button>
+        ${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="boost" data-id="${i.id}" title="Install performance mods">Boost FPS</button><button class="btn sm" data-a="hud" data-id="${i.id}" title="Vesper HUD mod: FPS, CPS, keystrokes...">HUD: ${i.hud ? 'on' : 'off'}</button>`}</div>
     </div>`).join('');
   grid.onclick = async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
@@ -35,6 +36,16 @@ export async function render(el) {
       if (b.dataset.a === 'folder') await invoke('open_instance_folder', { id });
       if (b.dataset.a === 'edit') form(inst, () => render(el));
       if (b.dataset.a === 'content') { S.target = id; go('mods'); }
+      if (b.dataset.a === 'boost' && await ask(`Install performance mods (such as Sodium and Lithium) into "${inst.name}"? They are free, from Modrinth, and can be removed in Mods and packs.`, 'Install')) {
+        toast('Installing performance mods...');
+        const r = await invoke('optimize_instance', { id });
+        toast(`Installed ${r.installed.length} mod${r.installed.length === 1 ? '' : 's'}${r.unavailable.length ? `. Not available for ${inst.mc_version}: ${r.unavailable.join(', ')}` : ''}`, 'ok');
+      }
+      if (b.dataset.a === 'hud') {
+        if (inst.hud) { await invoke('hud_remove', { id }); toast('In-game HUD turned off for this instance', 'ok'); }
+        else { toast('Installing the in-game HUD...'); await invoke('hud_install', { id }); toast('In-game HUD installed. Style it on the In-game HUD page.', 'ok'); }
+        await refreshInstances(); render(el);
+      }
       if (b.dataset.a === 'del' && await ask(`Delete "${inst.name}" with all its worlds and mods? This cannot be undone.`, 'Delete')) { await invoke('delete_instance', { id }); toast('Instance deleted', 'ok'); render(el); }
     } catch (err) { toast(errMsg(err), 'error'); }
   };
@@ -55,15 +66,33 @@ async function form(inst, done) {
       <label class="field grow" id="l-lv"><span>Loader version</span><select id="f-lv"></select></label></div>
     <p class="muted" id="f-note" style="margin:-6px 0 12px"></p>
     <label class="field" id="l-ram"><span>Memory: <b id="f-ramv"></b></span><input type="range" id="f-ram" min="1024" max="16384" step="512"></label>
-    <label class="field" id="l-jvm"><span>Extra JVM arguments</span><textarea id="f-jvm" rows="2" placeholder="-XX:+UseG1GC"></textarea></label>
+    <label class="field" id="l-perf"><span>Performance</span><select id="f-perf"><option value="auto">Auto (recommended)</option><option value="fps">Max FPS</option><option value="lowram">Low memory</option><option value="off">Off: use only my own settings</option></select></label>
+    <p class="muted" id="f-perfnote" style="margin:-6px 0 12px"></p>
+    <label class="field" id="l-jvm"><span>Extra JVM arguments</span><textarea id="f-jvm" rows="2" placeholder="Added last, so they override the performance settings"></textarea></label>
     <div class="foot"><button class="btn" id="f-cancel">Cancel</button><button class="btn primary" id="f-save">${inst ? 'Save' : 'Create'}</button></div>`);
   const $m = (s) => m.el.querySelector(s);
   $m('#f-type').value = cur ? typeOf(cur) : 'release';
   $m('#f-loader').value = inst?.loader || 'vanilla';
   $m('#f-ram').value = inst?.ram_mb || S.settings.default_ram_mb || 4096;
   $m('#f-jvm').value = inst?.jvm_args || '';
-  const ram = () => ($m('#f-ramv').textContent = ramLabel(+$m('#f-ram').value));
-  $m('#f-ram').oninput = ram; ram();
+  $m('#f-perf').value = inst?.perf || 'auto';
+  // A plain-language preview of what the launcher will do with these settings.
+  let perfTimer = 0, rec = 0;
+  const perfNote = () => {
+    clearTimeout(perfTimer);
+    perfTimer = setTimeout(async () => {
+      const loader = $m('#f-loader').value; if (loader === 'rust') return;
+      try {
+        const r = await invoke('perf_info', { id: inst?.id ?? null, mcVersion: $m('#f-ver').value, loader, profile: $m('#f-perf').value, ramMb: +$m('#f-ram').value });
+        rec = r.recommended_mb;
+        const note = $m('#f-perfnote'); if (!note.isConnected) return;
+        note.innerHTML = `${r.plan.notes.map(esc).join(' ')} Suggested for this PC (${ramLabel(r.system_mb)} installed${r.mods ? `, ${r.mods} mods` : ''}): <b>${ramLabel(rec)}</b>${+$m('#f-ram').value === rec ? '' : ' <button class="btn sm" id="f-rec" type="button">Use it</button>'}`;
+        const b = $m('#f-rec'); if (b) b.onclick = () => { $m('#f-ram').value = rec; ram(); perfNote(); };
+      } catch { /* the preview is optional */ }
+    }, 150);
+  };
+  const ram = () => { $m('#f-ramv').textContent = ramLabel(+$m('#f-ram').value); perfNote(); };
+  $m('#f-ram').oninput = ram; $m('#f-perf').onchange = perfNote; ram();
 
   const fillVersions = () => {
     const t = $m('#f-type').value;
@@ -74,7 +103,7 @@ async function form(inst, done) {
   const fillLoader = async () => {
     const loader = $m('#f-loader').value, mc = $m('#f-ver').value, my = ++token;
     const rust = loader === 'rust';
-    for (const s of ['#r-ver', '#l-lv', '#l-ram', '#l-jvm']) $m(s).style.display = rust ? 'none' : '';
+    for (const s of ['#r-ver', '#l-lv', '#l-ram', '#l-jvm', '#l-perf', '#f-perfnote']) $m(s).style.display = rust ? 'none' : '';
     if (rust) { $m('#f-save').disabled = false; $m('#f-note').textContent = RUST_NOTE; return; }
     $m('#f-lv').disabled = loader === 'vanilla';
     $m('#f-save').disabled = false;
@@ -89,17 +118,20 @@ async function form(inst, done) {
     if (inst && inst.loader === loader && list.includes(inst.loader_version)) $m('#f-lv').value = inst.loader_version;
     $m('#f-save').disabled = false;
   };
-  $m('#f-type').onchange = () => { fillVersions(); fillLoader(); };
-  $m('#f-ver').onchange = fillLoader;
-  $m('#f-loader').onchange = fillLoader;
+  $m('#f-type').onchange = () => { fillVersions(); fillLoader(); perfNote(); };
+  $m('#f-ver').onchange = () => { fillLoader(); perfNote(); };
+  $m('#f-loader').onchange = () => { fillLoader(); perfNote(); };
   fillVersions(); fillLoader();
 
   $m('#f-cancel').onclick = m.close;
   $m('#f-save').onclick = async () => {
-    const v = { name: $m('#f-name').value, mc: $m('#f-ver').value, loader: $m('#f-loader').value, lv: $m('#f-lv').value, ram: +$m('#f-ram').value, jvm: $m('#f-jvm').value };
+    const v = { name: $m('#f-name').value, mc: $m('#f-ver').value, loader: $m('#f-loader').value, lv: $m('#f-lv').value, ram: +$m('#f-ram').value, jvm: $m('#f-jvm').value, perf: $m('#f-perf').value };
     try {
-      if (inst) await invoke('update_instance', { inst: { ...inst, name: v.name.trim() || inst.name, mc_version: v.mc, loader: v.loader, loader_version: v.lv, ram_mb: v.ram, jvm_args: v.jvm } });
-      else await invoke('create_instance', { name: v.name, mcVersion: v.mc, loader: v.loader, loaderVersion: v.lv, ramMb: v.ram });
+      if (inst) await invoke('update_instance', { inst: { ...inst, name: v.name.trim() || inst.name, mc_version: v.mc, loader: v.loader, loader_version: v.lv, ram_mb: v.ram, jvm_args: v.jvm, perf: v.perf } });
+      else {
+        const made = await invoke('create_instance', { name: v.name, mcVersion: v.mc, loader: v.loader, loaderVersion: v.lv, ramMb: v.ram });
+        if (v.perf !== 'auto') await invoke('update_instance', { inst: { ...made, perf: v.perf } });
+      }
       m.close(); await refreshInstances(); done();
     } catch (e) { toast(errMsg(e), 'error'); }
   };

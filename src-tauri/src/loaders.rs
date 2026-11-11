@@ -38,12 +38,7 @@ pub async fn available(loader: &str, mc: &str) -> Result<Vec<String>> {
             out
         }
         "neoforge" => {
-            // NeoForge versions are "<minor>.<patch>.<build>" for Minecraft 1.<minor>.<patch>.
-            let parts: Vec<&str> = mc.split('.').collect();
-            if parts.len() < 2 || parts[0] != "1" {
-                return Ok(vec![]);
-            }
-            let prefix = format!("{}.{}.", parts[1], parts.get(2).unwrap_or(&"0"));
+            let Some(prefix) = neoforge_prefix(mc) else { return Ok(vec![]) };
             let v: Value = get_json(NEOFORGE_VERSIONS).await?;
             let mut all: Vec<String> = v["versions"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).filter(|x| x.starts_with(&prefix)).map(String::from).collect();
             all.reverse();
@@ -52,6 +47,39 @@ pub async fn available(loader: &str, mc: &str) -> Result<Vec<String>> {
         }
         _ => vec![],
     })
+}
+
+/// The start of NeoForge's version numbers for a Minecraft release (snapshots and pre-releases get none):
+///   1.21.4 -> "21.4."    1.21 -> "21.0."     (older scheme: the leading "1." is dropped)
+///   26.3   -> "26.3.0."  26.3.1 -> "26.3.1." (year-style Minecraft versions keep every part; the build follows)
+fn neoforge_prefix(mc: &str) -> Option<String> {
+    if mc.contains('-') {
+        return None;
+    }
+    let nums: Vec<u32> = mc.split('.').map(|p| p.parse().ok()).collect::<Option<Vec<_>>>()?;
+    match nums.as_slice() {
+        [1, minor, rest @ ..] => Some(format!("{}.{}.", minor, rest.first().copied().unwrap_or(0))),
+        [major, minor, rest @ ..] if *major >= 26 => Some(format!("{}.{}.{}.", major, minor, rest.first().copied().unwrap_or(0))),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::neoforge_prefix;
+
+    #[test]
+    fn neoforge_prefixes() {
+        assert_eq!(neoforge_prefix("1.21.4").as_deref(), Some("21.4."));
+        assert_eq!(neoforge_prefix("1.21").as_deref(), Some("21.0."));
+        assert_eq!(neoforge_prefix("1.20.1").as_deref(), Some("20.1."));
+        assert_eq!(neoforge_prefix("26.3").as_deref(), Some("26.3.0."));
+        assert_eq!(neoforge_prefix("26.3.1").as_deref(), Some("26.3.1."));
+        assert_eq!(neoforge_prefix("26.4-snapshot-8"), None);
+        assert_eq!(neoforge_prefix("1.21.5-pre1"), None);
+        assert_eq!(neoforge_prefix("24w14a"), None);
+        assert!("26.3.0.102".starts_with(&neoforge_prefix("26.3").unwrap()));
+    }
 }
 
 #[tauri::command]

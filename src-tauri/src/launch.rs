@@ -1,6 +1,6 @@
 //! Builds the Java command line from Mojang's version JSON and runs the game,
 //! streaming stdout/stderr to the UI console.
-use crate::{auth, error::CmdResult, instances, loaders, mojang, paths, rust};
+use crate::{auth, error::CmdResult, hud, instances, loaders, mojang, paths, perf, rust};
 use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use std::{collections::HashMap, io::Read, path::Path, process::Stdio, sync::Mutex};
@@ -174,11 +174,24 @@ pub async fn play(app: AppHandle, state: State<'_, Running>, id: String) -> CmdR
     vars.insert("launcher_name", "Vesper".into());
     vars.insert("launcher_version", env!("CARGO_PKG_VERSION").into());
 
+    // Memory, garbage collector and priority are tuned for the profile (perf.rs). The player's own
+    // arguments come last so they always win.
+    let java_major = v["javaVersion"]["majorVersion"].as_u64().unwrap_or(8) as u32;
+    let plan = perf::plan(&inst.perf, inst.ram_mb, java_major, perf::total_ram_mb());
+    for n in &plan.notes {
+        log(&app, &id, &format!("[Vesper] {n}"), "out");
+    }
+    if inst.hud {
+        if let Err(e) = hud::sync(&id) {
+            log(&app, &id, &format!("[Vesper] Could not update the HUD settings: {e:#}"), "err");
+        }
+    }
     let mut args: Vec<String> = vec![
-        format!("-Xmx{}M", inst.ram_mb),
-        format!("-Xms{}M", inst.ram_mb.min(512)),
+        format!("-Xmx{}M", plan.xmx_mb),
+        format!("-Xms{}M", plan.xms_mb),
         "-Dlog4j2.formatMsgNoLookups=true".into(), // Log4Shell mitigation for older versions
     ];
+    args.extend(plan.flags.iter().cloned());
     args.extend(inst.jvm_args.split_whitespace().map(String::from));
     if v["arguments"]["jvm"].is_array() {
         args.extend(expand(&v["arguments"]["jvm"], &vars));
@@ -198,7 +211,7 @@ pub async fn play(app: AppHandle, state: State<'_, Running>, id: String) -> CmdR
     let mut cmd = Command::new(&java);
     cmd.args(&args).current_dir(&game_dir).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(windows)]
-    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no stray console
+    cmd.creation_flags(0x0800_0000 | if plan.high_priority { 0x0000_8000 } else { 0 }); // CREATE_NO_WINDOW (no stray console) | ABOVE_NORMAL_PRIORITY_CLASS
     let child = cmd.spawn().with_context(|| format!("Could not start Java at {}", java.display()))?;
 
     inst.last_played = instances::now();

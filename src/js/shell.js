@@ -3,7 +3,7 @@ import { invoke } from './api.js';
 import { S, activeAccount } from './state.js';
 import { $, $$, esc, md, modal, ICON, toast, errMsg, headHtml } from './util.js';
 
-const NAV = [['home', 'Home'], ['instances', 'Instances'], ['mods', 'Mod Library'], ['accounts', 'Accounts'], ['settings', 'Settings']];
+const NAV = [['home', 'Home'], ['instances', 'Instances'], ['mods', 'Mod Library'], ['hud', 'In-game HUD'], ['accounts', 'Accounts'], ['settings', 'Settings']];
 let views = {};
 export const registerViews = (v) => (views = v);
 

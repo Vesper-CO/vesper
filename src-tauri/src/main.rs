@@ -4,13 +4,16 @@ mod auth;
 mod download;
 mod error;
 mod horizon_mods;
+mod hud;
 mod instances;
 mod launch;
 mod loaders;
 mod modrinth;
 mod mojang;
 mod mrpack;
+mod optimize;
 mod paths;
+mod perf;
 mod presence;
 mod rust;
 mod settings;
@@ -132,6 +135,12 @@ fn main() {
             modrinth::modrinth_toggle,
             modrinth::modrinth_remove,
             modrinth::modrinth_update_all,
+            optimize::perf_info,
+            optimize::optimize_instance,
+            hud::get_hud,
+            hud::save_hud,
+            hud::hud_install,
+            hud::hud_remove,
         ])
         .run(tauri::generate_context!())
         .expect("Vesper failed to start");

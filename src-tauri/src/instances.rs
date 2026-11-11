@@ -8,6 +8,7 @@ use tauri::{AppHandle, State};
 
 const LOADERS: [&str; 6] = ["vanilla", "fabric", "quilt", "forge", "neoforge", "rust"];
 fn d_ram() -> u32 { 4096 }
+fn d_perf() -> String { "auto".into() }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Instance {
@@ -24,6 +25,12 @@ pub struct Instance {
     pub ram_mb: u32,
     #[serde(default)]
     pub jvm_args: String,
+    /// Performance profile: auto, fps, lowram or off (see perf.rs).
+    #[serde(default = "d_perf")]
+    pub perf: String,
+    /// Whether the in-game HUD mod is installed in this instance.
+    #[serde(default)]
+    pub hud: bool,
     #[serde(default)]
     pub created: u64,
     #[serde(default)]
@@ -80,6 +87,8 @@ pub fn create(name: &str, mc: &str, loader: &str, lv: Option<String>, ram: u32) 
         version_id: String::new(),
         ram_mb: ram.clamp(1024, 65536),
         jvm_args: String::new(),
+        perf: d_perf(),
+        hud: false,
         created: now(),
         last_played: 0,
     };
@@ -102,6 +111,10 @@ pub fn update_instance(inst: Instance) -> CmdResult<Instance> {
     new.created = old.created;
     new.last_played = old.last_played;
     new.ram_mb = new.ram_mb.clamp(1024, 65536);
+    if !crate::perf::PROFILES.contains(&new.perf.as_str()) {
+        new.perf = d_perf();
+    }
+    new.hud = old.hud; // changed only through hud_install / hud_remove
     if new.loader == "rust" {
         new.mc_version = crate::rust::MC_VERSION.into();
         new.loader_version.clear();
