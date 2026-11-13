@@ -1,12 +1,14 @@
 package dev.vesper.hud.overlay;
 
 import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL33;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -24,7 +26,11 @@ final class GlSurface implements Hud.Sink {
     // state saved in begin() and restored in end()
     private int sProg, sVao, sArray, sActive, sTex, sFbo, sBlendSrcRgb, sBlendDstRgb, sBlendSrcA, sBlendDstA;
     private final int[] sViewport = new int[4];
-    private boolean sBlend, sDepth, sCull, sScissor, sStencil, sDepthMask;
+    private boolean sBlend, sDepth, sCull, sScissor, sStencil, sDepthMask, sSrgb, sLogic, sDiscard;
+    private int sSampler;
+    private boolean hasSampler;
+    private final ByteBuffer sMask = BufferUtils.createByteBuffer(4);
+    int lastQuads() { return quads; }
 
     private static final String VS = "#version 150\nin vec2 pos; in vec2 uv; in vec4 col; out vec2 vUv; out vec4 vCol; uniform vec2 screen;\n"
         + "void main() { vUv = uv; vCol = col; gl_Position = vec4(pos.x / screen.x * 2.0 - 1.0, 1.0 - pos.y / screen.y * 2.0, 0.0, 1.0); }\n";
@@ -32,6 +38,7 @@ final class GlSurface implements Hud.Sink {
         + "void main() { outColor = vCol * texture(atlas, vUv); }\n";
 
     GlSurface(Font font) {
+        hasSampler = GL.getCapabilities().OpenGL33;
         int oldPub = GL11.glGetInteger(0x88EF), oldTex, oldActive = GL11.glGetInteger(0x84E0);
         GL15.glBindBuffer(0x88EC, 0); // no pixel-unpack buffer while uploading from memory
         GL13.glActiveTexture(0x84C0);
@@ -100,6 +107,13 @@ final class GlSurface implements Hud.Sink {
         sBlendSrcRgb = GL11.glGetInteger(0x80C9); sBlendDstRgb = GL11.glGetInteger(0x80C8); sBlendSrcA = GL11.glGetInteger(0x80CB); sBlendDstA = GL11.glGetInteger(0x80CA);
         GL13.glActiveTexture(0x84C0);
         sTex = GL11.glGetInteger(0x8069);
+        // Newer game versions may leave a sampler object, a colour write mask, sRGB or a logic op set: neutralise them
+        sSampler = hasSampler ? GL11.glGetInteger(0x8919) : 0;
+        if (hasSampler) GL33.glBindSampler(0, 0);
+        sMask.clear(); GL11.glGetBooleanv(0x0C23, sMask);
+        sSrgb = GL11.glIsEnabled(0x8DB9); sLogic = GL11.glIsEnabled(0x0BF2); sDiscard = GL11.glIsEnabled(0x8C89);
+        GL11.glColorMask(true, true, true, true);
+        GL11.glDisable(0x8DB9); GL11.glDisable(0x0BF2); GL11.glDisable(0x8C89);
 
         GL30.glBindFramebuffer(0x8D40, 0);
         GL11.glViewport(0, 0, w, h);
@@ -133,6 +147,11 @@ final class GlSurface implements Hud.Sink {
             GL11.glDrawArrays(4, 0, quads * 6);
         }
         GL11.glBindTexture(0x0DE1, sTex);
+        if (hasSampler) GL33.glBindSampler(0, sSampler);
+        GL11.glColorMask(sMask.get(0) != 0, sMask.get(1) != 0, sMask.get(2) != 0, sMask.get(3) != 0);
+        if (sSrgb) GL11.glEnable(0x8DB9);
+        if (sLogic) GL11.glEnable(0x0BF2);
+        if (sDiscard) GL11.glEnable(0x8C89);
         GL13.glActiveTexture(sActive);
         GL30.glBindVertexArray(sVao);
         GL15.glBindBuffer(0x8892, sArray);

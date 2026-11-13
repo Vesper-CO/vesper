@@ -43,6 +43,8 @@ final class GlfwPatch implements ClassFileTransformer {
                     };
                 }
             }, 0);
+            if (patched[0]) System.out.println("[Vesper HUD] hooked GLFW.glfwSwapBuffers (class loader: " + loader + ")");
+            else System.err.println("[Vesper HUD] GLFW was loaded but has no glfwSwapBuffers(long); the HUD cannot draw");
             return patched[0] ? cw.toByteArray() : null;
         } catch (Throwable t) {
             System.err.println("[Vesper HUD] could not patch GLFW: " + t);

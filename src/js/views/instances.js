@@ -26,7 +26,7 @@ export async function render(el) {
       <div class="chips"><span class="chip accent">${LOADER_NAMES[i.loader]}</span><span class="chip">${esc(i.mc_version)}</span>${i.loader === 'rust' ? '<span class="chip">No Java</span>' : `<span class="chip">${ramLabel(i.ram_mb)}</span>`}</div>
       <small class="muted">${ago(i.last_played)}</small>
       <div class="actions"><button class="btn primary sm" data-play="${i.id}" data-a="play" data-id="${i.id}">Play</button><button class="btn sm" data-a="content" data-id="${i.id}">Mods and packs</button>
-        ${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="boost" data-id="${i.id}" title="Install performance mods">Boost FPS</button><button class="btn sm" data-a="hud" data-id="${i.id}" title="In-game HUD: FPS, CPS, keystrokes... (works on every loader)">HUD: ${i.hud ? 'on' : 'off'}</button>`}</div>
+        ${i.loader === 'rust' ? '' : `<button class="btn sm" data-a="boost" data-id="${i.id}" title="Install performance mods">Boost FPS</button>`}<button class="btn sm" data-a="hud" data-id="${i.id}" title="${i.loader === 'rust' ? "Uses Horizon's built-in HUD widgets" : 'In-game HUD: FPS, CPS, keystrokes... (works on every loader)'}">HUD: ${i.hud ? 'on' : 'off'}</button></div>
     </div>`).join('');
   grid.onclick = async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
@@ -45,7 +45,7 @@ export async function render(el) {
         if (inst.hud) { await invoke('hud_set', { id, enabled: false }); toast('In-game HUD turned off for this instance', 'ok'); }
         else {
           await invoke('hud_set', { id, enabled: true });
-          toast('In-game HUD turned on. Style it on the In-game HUD page.', 'ok');
+          toast(inst.loader === 'rust' ? 'In-game HUD turned on. Horizon draws it: press Edit HUD on its PvP & HUD page to adjust it in game.' : 'In-game HUD turned on. Style it on the In-game HUD page, or press Right Shift in a menu in game to drag it.', 'ok');
           if ((inst.loader === 'fabric' || inst.loader === 'quilt') && inst.mc_version === '1.21.4'
             && await ask('Also install the Fabric add-on? It adds coordinates, ping, direction, armor and potion effects.', 'Install')) {
             toast('Installing the add-on...'); await invoke('hud_install', { id }); toast('Add-on installed', 'ok');

@@ -6,7 +6,7 @@ import { $, esc, toast, errMsg } from '../util.js';
 import { ELEMENTS, PRESETS, LOOK, defaultHud, mergeHud, hexA, styleOf } from '../hud-schema.js';
 
 const GUI_W = 480; // the preview is drawn as if the game's GUI were 480 units wide (GUI scale 4 at 1080p)
-let H, sel = 'fps', bgMode = 'day', saveTimer, root;
+let H, sel = 'fps', bgMode = 'day', saveTimer, root, resizeWatch;
 
 const meta = (id) => ELEMENTS.find((e) => e.id === id);
 const pct = (v) => Math.round(v * 100) + '%';
@@ -16,11 +16,11 @@ export async function render(el) {
   H = mergeHud(await invoke('get_hud').catch(() => null));
   if (!meta(sel)) sel = 'fps';
   el.innerHTML = `<div class="page">
-    <div class="page-head"><div><h1>In-game HUD</h1><p class="muted">Drag the elements, then style each one. Changes are saved as you go and show up in a running game within a couple of seconds.</p></div>
+    <div class="page-head"><div><h1>In-game HUD</h1><p class="muted">Drag the elements, then style each one. Changes are saved as you go and show up in a running game within a couple of seconds. You can also move them in game: open a menu (Esc), press Right Shift, and drag.</p></div>
       <div class="actions"><small class="muted" id="hud-status"></small><button class="btn" id="hud-reset">Reset all</button></div></div>
     <div class="hud-layout">
       <div class="hud-left">
-        <div class="hud-stage ${bgMode}" id="stage"></div>
+        <div class="hud-stage ${bgMode}" id="hud-stage"></div>
         <div class="row hud-bgs"><small class="muted">Preview on</small>${['day', 'night', 'cave'].map((m) => `<button class="chip ${m === bgMode ? 'accent' : ''}" data-bg="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div>
         <div class="card" style="margin-top:14px"><h3>Style presets</h3><p class="muted" style="margin:0">Applies colours and shape to every element. Positions and on/off stay as they are.</p>
           <div class="chips" id="presets">${Object.keys(PRESETS).map((n) => `<button class="btn sm" data-preset="${esc(n)}">${esc(n)}</button>`).join('')}</div></div>
@@ -28,11 +28,13 @@ export async function render(el) {
       <div class="hud-panels" id="panel"></div>
     </div></div>`;
   drawStage(); drawPanel();
-  new ResizeObserver(drawStage).observe($('#stage'));
+  resizeWatch?.disconnect(); // one watcher at a time, and only while this page exists
+  resizeWatch = new ResizeObserver(() => { if (!$('#hud-stage')) { resizeWatch.disconnect(); return; } drawStage(); });
+  resizeWatch.observe($('#hud-stage'));
   $('#hud-reset').onclick = () => { H = defaultHud(); sel = 'fps'; drawStage(); drawPanel(); saveSoon(); };
   el.querySelector('.hud-bgs').onclick = (e) => {
     const b = e.target.closest('[data-bg]'); if (!b) return;
-    bgMode = b.dataset.bg; $('#stage').className = `hud-stage ${bgMode}`;
+    bgMode = b.dataset.bg; $('#hud-stage').className = `hud-stage ${bgMode}`;
     el.querySelectorAll('[data-bg]').forEach((c) => c.classList.toggle('accent', c === b));
   };
   $('#presets').onclick = (e) => {
@@ -73,7 +75,7 @@ function innerHtml(id, c, px) {
   return textHtml(c, m.sample);
 }
 function drawStage() {
-  const st = $('#stage'); if (!st) return;
+  const st = $('#hud-stage'); if (!st) return;
   const k = st.clientWidth / GUI_W, px = (n) => (n * k).toFixed(2) + 'px';
   st.style.opacity = H.enabled ? '' : '.55';
   st.innerHTML = ELEMENTS.filter((m) => H.elements[m.id].enabled).map((m) => {
@@ -84,7 +86,7 @@ function drawStage() {
   place();
 }
 function place() {
-  const st = $('#stage'); if (!st) return;
+  const st = $('#hud-stage'); if (!st) return;
   for (const e of st.querySelectorAll('.hud-el')) {
     const c = H.elements[e.dataset.id];
     e.style.left = c.x * Math.max(0, st.clientWidth - e.offsetWidth) + 'px';
@@ -92,7 +94,7 @@ function place() {
   }
 }
 function setupDrag() {
-  const st = $('#stage'); let drag = null;
+  const st = $('#hud-stage'); let drag = null;
   st.addEventListener('pointerdown', (e) => {
     const el = e.target.closest('.hud-el'); if (!el) return;
     el.setPointerCapture(e.pointerId);

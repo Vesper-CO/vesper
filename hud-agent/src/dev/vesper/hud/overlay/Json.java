@@ -12,6 +12,53 @@ final class Json {
 
     private Json(String s) { this.s = s; }
 
+    /** Pretty-print what parse() returns (maps, lists, strings, numbers, booleans). */
+    static String write(Object o) {
+        StringBuilder b = new StringBuilder();
+        put(b, o, 0);
+        return b.append('\n').toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void put(StringBuilder b, Object o, int ind) {
+        if (o == null) b.append("null");
+        else if (o instanceof String) quote(b, (String) o);
+        else if (o instanceof Boolean) b.append(o);
+        else if (o instanceof Number) {
+            double d = ((Number) o).doubleValue();
+            if (d == Math.rint(d) && Math.abs(d) < 1e9) b.append((long) d); else b.append(Math.round(d * 10000.0) / 10000.0);
+        } else if (o instanceof Map) {
+            Map<String, Object> m = (Map<String, Object>) o;
+            if (m.isEmpty()) { b.append("{}"); return; }
+            b.append("{\n");
+            int n = 0;
+            for (Map.Entry<String, Object> e : m.entrySet()) {
+                pad(b, ind + 1); quote(b, e.getKey()); b.append(": "); put(b, e.getValue(), ind + 1);
+                b.append(++n < m.size() ? ",\n" : "\n");
+            }
+            pad(b, ind); b.append('}');
+        } else if (o instanceof List) {
+            List<Object> l = (List<Object>) o;
+            b.append('[');
+            for (int i = 0; i < l.size(); i++) { if (i > 0) b.append(", "); put(b, l.get(i), ind); }
+            b.append(']');
+        } else quote(b, String.valueOf(o));
+    }
+
+    private static void pad(StringBuilder b, int n) { for (int i = 0; i < n; i++) b.append("  "); }
+
+    private static void quote(StringBuilder b, String s) {
+        b.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"' || c == '\\') b.append('\\').append(c);
+            else if (c == '\n') b.append("\\n");
+            else if (c < 32) b.append(String.format("\\u%04x", (int) c));
+            else b.append(c);
+        }
+        b.append('"');
+    }
+
     static Object parse(String text) {
         Json j = new Json(text);
         j.ws();

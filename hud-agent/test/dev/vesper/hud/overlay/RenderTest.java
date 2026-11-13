@@ -20,9 +20,11 @@ public class RenderTest {
         Stats st = new Stats(); st.fps = 144; st.frameMs = 6.9f;
         Input in = new Input(); in.down[0] = true; in.down[5] = true; // W and right mouse button held
         long now = 42L * 60 * 1_000_000_000L;
-        new Hud(new Hud.Sink() {
+        Hud hud = new Hud(new Hud.Sink() {
             public void quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, int argb) { raster(x0, y0, x1, y1, u0, v0, u1, v1, argb); }
-        }, font, st, in, now).draw(cfg, W, H);
+        }, font, st, in, now);
+        hud.draw(cfg, W, H);
+        if (a.length > 3) hud.editChrome(W, H, "frametime", "HUD editor: drag an element, + / - to resize, Right Shift to save");
         ImageIO.write(img, "png", new File(a[1]));
         System.out.println("wrote " + a[1]);
     }

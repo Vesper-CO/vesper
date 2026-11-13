@@ -21,6 +21,7 @@ public final class Agent {
             jar = new File(Agent.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toURI().toURL();
             System.getProperties().put(HOOK_KEY, new Bootstrap());
             inst.addTransformer(new GlfwPatch(), false);
+            System.out.println("[Vesper HUD] agent loaded from " + jar);
             System.setProperty("vesper.hud.agent", "1"); // the Fabric add-on checks this to avoid drawing the same elements twice
         } catch (Throwable t) {
             System.err.println("[Vesper HUD] agent not started: " + t);
@@ -37,9 +38,11 @@ public final class Agent {
                 if (parent != null) {
                     Class<?> c = new OverlayLoader(jar, parent).loadClass("dev.vesper.hud.overlay.Overlay");
                     next = (LongConsumer) c.getDeclaredConstructor().newInstance();
+                    System.out.println("[Vesper HUD] first frame reached the hook; overlay loaded through " + parent);
                 }
             } catch (Throwable t) {
                 System.err.println("[Vesper HUD] overlay not started: " + t);
+                t.printStackTrace();
             }
             System.getProperties().put(HOOK_KEY, next);
             next.accept(window);

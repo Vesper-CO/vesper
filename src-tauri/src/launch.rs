@@ -194,7 +194,10 @@ pub async fn play(app: AppHandle, state: State<'_, Running>, id: String) -> CmdR
     args.extend(plan.flags.iter().cloned());
     if inst.hud {
         match hud::agent_args(&id, &inst.mc_version, &java) {
-            Ok(a) => args.extend(a),
+            Ok(a) => {
+                log(&app, &id, &format!("[Vesper] In-game HUD agent added: {}", a[0]), "out");
+                args.extend(a);
+            }
             Err(e) => log(&app, &id, &format!("[Vesper] The in-game HUD was not started: {e:#}"), "err"),
         }
     }

@@ -1,9 +1,12 @@
 package dev.vesper.hud.overlay;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
+import java.util.Set;
 import java.util.Map;
 
 /**
@@ -43,6 +46,38 @@ final class Config {
     static Config load(File f) throws Exception {
         String text = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
         return parse(text);
+    }
+
+    /**
+     * Save position and size of the edited elements into the settings file, keeping everything else in it as it was
+     * (colours, templates and anything this version does not know), so the launcher's page shows the same file.
+     */
+    @SuppressWarnings("unchecked")
+    void saveEdits(File f, Set<String> ids) throws IOException {
+        Map<String, Object> root = new LinkedHashMap<String, Object>();
+        try { if (f.isFile()) { Object o = Json.parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8)); if (o instanceof Map) root = (Map<String, Object>) o; } }
+        catch (RuntimeException ignored) { /* unreadable: start a fresh file */ }
+        if (!root.containsKey("version")) root.put("version", 1.0);
+        if (!root.containsKey("enabled")) root.put("enabled", Boolean.TRUE);
+        if (!root.containsKey("scale")) root.put("scale", 1.0);
+        Object eo = root.get("elements");
+        Map<String, Object> els = eo instanceof Map ? (Map<String, Object>) eo : new LinkedHashMap<String, Object>();
+        for (String id : ids) {
+            El e = this.els.get(id);
+            if (e == null) continue;
+            Object o = els.get(id);
+            Map<String, Object> m = o instanceof Map ? (Map<String, Object>) o : new LinkedHashMap<String, Object>();
+            m.put("x", (double) e.x); m.put("y", (double) e.y); m.put("scale", (double) e.scale);
+            if (!m.containsKey("enabled")) m.put("enabled", e.enabled);
+            els.put(id, m);
+        }
+        root.put("elements", els);
+        File dir = f.getAbsoluteFile().getParentFile();
+        if (dir != null) dir.mkdirs();
+        File tmp = new File(f.getPath() + ".tmp");
+        Files.write(tmp.toPath(), Json.write(root).getBytes(StandardCharsets.UTF_8));
+        try { Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE); }
+        catch (IOException atomicNotSupported) { Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING); }
     }
 
     @SuppressWarnings("unchecked")

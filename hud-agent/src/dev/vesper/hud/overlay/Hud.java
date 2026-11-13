@@ -14,6 +14,15 @@ final class Hud {
         abstract void draw(float x, float y);
     }
 
+    /** Where an element was drawn this frame, in pixels (used to pick and drag elements in edit mode). */
+    static final class Hit {
+        final String id; final float x, y, w, h;
+        Hit(String id, float x, float y, float w, float h) { this.id = id; this.x = x; this.y = y; this.w = w; this.h = h; }
+        boolean contains(float px, float py) { return px >= x && px <= x + w && py >= y && py <= y + h; }
+    }
+
+    final java.util.ArrayList<Hit> hits = new java.util.ArrayList<Hit>();
+    float unit = 1f;
     private final Sink sink;
     private final Font font;
     private final Stats stats;
@@ -23,14 +32,17 @@ final class Hud {
     Hud(Sink sink, Font font, Stats stats, Input input, long now) { this.sink = sink; this.font = font; this.stats = stats; this.input = input; this.now = now; }
 
     void draw(Config cfg, int W, int H) {
-        float unit = Math.max(0.5f, Math.min(W / 480f, H / 270f));
+        unit = Math.max(0.5f, Math.min(W / 480f, H / 270f));
+        hits.clear();
         for (String id : Config.IDS) {
             Config.El e = cfg.els.get(id);
             if (e == null || !e.enabled) continue;
             float su = unit * e.scale * cfg.scale;
             Block b = build(id, e, su);
             if (b == null) continue;
-            b.draw(clamp01(e.x) * Math.max(0, W - b.w), clamp01(e.y) * Math.max(0, H - b.h));
+            float px = clamp01(e.x) * Math.max(0, W - b.w), py = clamp01(e.y) * Math.max(0, H - b.h);
+            hits.add(new Hit(id, px, py, b.w, b.h));
+            b.draw(px, py);
         }
     }
 
@@ -119,6 +131,44 @@ final class Hud {
                 }
             }
         };
+    }
+
+    // ----- edit mode: outlines, names and the banner -----
+
+    private static String niceName(String id) {
+        if (id.equals("fps")) return "FPS";
+        if (id.equals("cps")) return "CPS";
+        if (id.equals("frametime")) return "Frame time";
+        if (id.equals("memory")) return "Memory";
+        if (id.equals("clock")) return "Clock";
+        if (id.equals("session")) return "Playtime";
+        return "Keystrokes";
+    }
+
+    void editChrome(int W, int H, String active, String banner) {
+        float t = Math.max(1f, unit * 0.75f), fs = 6.5f * unit;
+        for (Hit hit : hits) {
+            boolean on = hit.id.equals(active);
+            int c = on ? 0xFFFFFFFF : 0xE08F7CFF;
+            font.rect(sink, hit.x - 2 * t, hit.y - 2 * t, hit.x + hit.w + 2 * t, hit.y - t, c);
+            font.rect(sink, hit.x - 2 * t, hit.y + hit.h + t, hit.x + hit.w + 2 * t, hit.y + hit.h + 2 * t, c);
+            font.rect(sink, hit.x - 2 * t, hit.y - t, hit.x - t, hit.y + hit.h + t, c);
+            font.rect(sink, hit.x + hit.w + t, hit.y - t, hit.x + hit.w + 2 * t, hit.y + hit.h + t, c);
+            if (!on) continue; // only the element under the pointer gets a name tag, so crowded corners stay readable
+            String n = niceName(hit.id);
+            float cw = font.width(n, fs) + 6 * unit, ch = 9 * unit, cy = hit.y - 2 * t - ch < 0 ? hit.y + hit.h + 2 * t : hit.y - 2 * t - ch;
+            font.rect(sink, hit.x, cy, hit.x + cw, cy + ch, on ? 0xF08F7CFF : 0xD00B0B17);
+            font.text(sink, n, hit.x + 3 * unit, baseline(cy, ch, fs), fs, 0xFFFFFFFF);
+        }
+        if (banner != null) banner(W, banner);
+    }
+
+    /** A message box at the top centre of the screen. */
+    void banner(int W, String text) {
+        float fs = 8f * unit, pad = 5f * unit, w = font.width(text, fs) + 2 * pad, h = 9f * unit + 2 * pad, x = (W - w) / 2f, y = 6f * unit;
+        font.rect(sink, x, y, x + w, y + h, 0xE60B0B17);
+        font.rect(sink, x, y, x + w, y + unit, 0xFF8F7CFF);
+        font.text(sink, text, x + pad, baseline(y + pad, 9f * unit, fs), fs, 0xFFFFFFFF);
     }
 
     // ----- boxes -----

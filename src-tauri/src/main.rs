@@ -5,6 +5,7 @@ mod download;
 mod error;
 mod horizon_mods;
 mod hud;
+mod hud_rust;
 mod instances;
 mod launch;
 mod loaders;

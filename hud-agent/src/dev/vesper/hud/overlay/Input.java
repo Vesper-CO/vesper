@@ -22,9 +22,10 @@ final class Input {
     private static final String[] OPTION = { "key_key.forward", "key_key.left", "key_key.back", "key_key.right", "key_key.attack", "key_key.use", "key_key.jump" };
     final boolean[] down = new boolean[7];
     private final ArrayDeque<Long> left = new ArrayDeque<Long>(), right = new ArrayDeque<Long>();
-    private boolean wasLeft, wasRight, wasF1;
+    private boolean wasLeft, wasRight, wasF1, wasShift, wasPlus, wasMinus;
     private long lastRead;
     boolean f1Pressed; // true for the one frame in which F1 went down
+    boolean rshiftPressed, plusPressed, minusPressed; // same, for Right Shift (edit mode), + and -
 
     void poll(long window, long nowNanos, File options) {
         if (nowNanos - lastRead > 10_000_000_000L || lastRead == 0) { lastRead = nowNanos; readBindings(options); }
@@ -40,7 +41,13 @@ final class Input {
         boolean f1 = GLFW.glfwGetKey(window, 290) == 1;
         f1Pressed = f1 && !wasF1;
         wasF1 = f1;
+        boolean sh = GLFW.glfwGetKey(window, 344) == 1, pl = GLFW.glfwGetKey(window, 61) == 1 || GLFW.glfwGetKey(window, 334) == 1, mi = GLFW.glfwGetKey(window, 45) == 1 || GLFW.glfwGetKey(window, 333) == 1;
+        rshiftPressed = sh && !wasShift; plusPressed = pl && !wasPlus; minusPressed = mi && !wasMinus;
+        wasShift = sh; wasPlus = pl; wasMinus = mi;
     }
+
+    /** The mouse pointer is free (a menu is open) rather than captured by the game for looking around. */
+    static boolean cursorFree(long window) { return GLFW.glfwGetInputMode(window, 0x33001) == 0x34001; }
 
     static int cps(ArrayDeque<Long> q, long nowNanos) {
         long cutoff = nowNanos / 1_000_000L - 1000;

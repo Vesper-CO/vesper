@@ -17,4 +17,7 @@ public final class GL11 {
     public static void glDepthMask(boolean b) { }
     public static void glDrawArrays(int mode, int first, int count) { drawCalls++; quadVertices += count; }
     public static int glGetError() { return 0; }
+    public static void glColorMask(boolean r, boolean g, boolean b, boolean a) { }
+    public static void glGetBooleanv(int p, ByteBuffer v) { for (int i = 0; i < 4; i++) v.put(i, (byte) 1); }
+    public static String glGetString(int n) { return n == 0x1F02 ? "4.6 stub" : "Stub GPU"; }
 }

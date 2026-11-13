@@ -71,12 +71,21 @@ pub fn hud_set(id: String, enabled: bool) -> CmdResult<()> {
     let mut inst = instances::load(&id)?;
     if enabled {
         if inst.loader == "rust" {
-            return Err(anyhow!("Rust instances do not use Java, so the in-game HUD is not available for them yet.").into());
+            // Horizon draws its own HUD: write the layout into its settings file
+            let saved = get_hud();
+            let hud = if saved.is_null() { crate::hud_rust::default_hud() } else { saved };
+            crate::hud_rust::apply(&id, &hud)?;
+        } else {
+            if !crate::perf::mc_has_glfw(&inst.mc_version) {
+                return Err(anyhow!("The in-game HUD needs Minecraft 1.13 or newer.").into());
+            }
+            sync(&id)?;
         }
-        if !crate::perf::mc_has_glfw(&inst.mc_version) {
-            return Err(anyhow!("The in-game HUD needs Minecraft 1.13 or newer.").into());
-        }
-        sync(&id)?;
+    } else if inst.loader == "rust" {
+        let mut off = get_hud();
+        if off.is_null() { off = crate::hud_rust::default_hud(); }
+        off["enabled"] = Value::Bool(false);
+        crate::hud_rust::apply(&id, &off)?;
     } else {
         remove_old_jars(&paths::game_dir(&id).join("mods"));
     }
@@ -87,9 +96,33 @@ pub fn hud_set(id: String, enabled: bool) -> CmdResult<()> {
 
 fn hud_file() -> std::path::PathBuf { paths::root().join("hud.json") }
 
+/// The in-game editor saves into an instance's own copy of the settings. When one is newer than the launcher's
+/// file, it holds changes made in game, so it becomes the launcher's copy (otherwise the next launch would undo them).
+fn pull_newer() {
+    let main = hud_file();
+    let main_time = std::fs::metadata(&main).and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
+    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
+    if let Ok(rd) = std::fs::read_dir(paths::instances()) {
+        for e in rd.flatten() {
+            let p = e.path().join("game").join("config").join("vesper-hud.json");
+            if let Ok(t) = std::fs::metadata(&p).and_then(|m| m.modified()) {
+                if t > main_time && best.as_ref().map_or(true, |(bt, _)| t > *bt) { best = Some((t, p)); }
+            }
+        }
+    }
+    if let Some((_, p)) = best {
+        if let Ok(bytes) = std::fs::read(&p) {
+            if bytes.len() <= MAX_CONFIG && serde_json::from_slice::<Value>(&bytes).map(|v| v.is_object()).unwrap_or(false) {
+                let _ = std::fs::write(&main, bytes);
+            }
+        }
+    }
+}
+
 /// The saved HUD settings, or `null` when nothing was saved yet (the UI then uses its defaults).
 #[tauri::command]
 pub fn get_hud() -> Value {
+    pull_newer();
     std::fs::read(hud_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null)
 }
 
@@ -103,11 +136,13 @@ pub fn save_hud(hud: Value) -> CmdResult<()> {
         return Err(anyhow!("HUD settings are too large").into());
     }
     std::fs::write(hud_file(), bytes)?;
+    crate::hud_rust::apply_all(&hud); // Rust instances get the same layout in their own settings file
     Ok(())
 }
 
 /// Copy the saved HUD settings into an instance's config folder (called before launching).
 pub fn sync(id: &str) -> Result<()> {
+    pull_newer();
     let Ok(bytes) = std::fs::read(hud_file()) else { return Ok(()) };
     let dir = paths::game_dir(id).join("config");
     std::fs::create_dir_all(&dir)?;

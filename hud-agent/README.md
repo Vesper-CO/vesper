@@ -33,3 +33,18 @@ copies the jar to `src-tauri/resources/`, which the launcher embeds. `tools/Bake
 `test/AgentMain.java` runs a fake GLFW in its own class loader under the real agent and checks that the patched
 call reaches the overlay and draws. `test/.../RenderTest.java` draws the overlay to a PNG with a software
 rasteriser. The OpenGL calls themselves can only be checked in a real game.
+
+## Editing in game
+
+With a menu open (Esc), press **Right Shift**: every element gets an outline. Drag one to move it (it snaps to the
+screen's edges and centre), hover one and press **+** or **-** to resize it, and press Right Shift again (or go back
+to the game) to save into `config/vesper-hud.json`. The launcher notices the newer file and uses it as its own copy.
+Clicks still reach the menu underneath, so avoid starting a drag on a button.
+
+## When nothing shows
+
+The agent prints `[Vesper HUD]` lines to the game's console and to `vesper-hud.log` in the game folder. In order, a
+healthy start prints: `agent loaded`, `hooked GLFW.glfwSwapBuffers`, `first frame reached the hook`, `OpenGL: ...`,
+`overlay ready`, `first frame drawn`. Where it stops says why: no first line means the agent was not started; no
+second means GLFW was never loaded through the normal path; an error after `overlay starting` names the OpenGL call or
+the missing OpenGL context (a renderer that is not OpenGL cannot be drawn on this way).
