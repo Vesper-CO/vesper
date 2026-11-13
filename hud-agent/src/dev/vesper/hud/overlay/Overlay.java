@@ -1,6 +1,5 @@
 package dev.vesper.hud.overlay;
 
-import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 
@@ -21,6 +20,8 @@ import java.util.function.LongConsumer;
  * one under the pointer, and Right Shift again (or going back to the game) saves.
  */
 public final class Overlay implements LongConsumer {
+    private final Platform plat;
+    private final String platformName;
     private boolean dead, started, hidden, firstDrawLogged, heartbeatLogged;
     private int errors, frames;
     private long window;
@@ -43,6 +44,12 @@ public final class Overlay implements LongConsumer {
     private final Set<String> edited = new HashSet<String>();
     private List<Hud.Hit> hits = new ArrayList<Hud.Hit>();
 
+    /** @param platform "glfw" (Minecraft up to 1.21.x) or "sdl" (26.x) */
+    public Overlay(String platform) {
+        platformName = platform;
+        plat = "sdl".equals(platform) ? new SdlPlatform() : new GlfwPlatform();
+    }
+
     @Override
     public void accept(long win) {
         if (dead) return;
@@ -53,9 +60,9 @@ public final class Overlay implements LongConsumer {
             stats.frame(now);
             if (!started) start();
             reloadConfig(now);
-            input.poll(window, now, optionsFile);
+            input.poll(plat, window, now, optionsFile);
             if (input.f1Pressed) hidden = !hidden; // F1 hides the game's own HUD, so hide ours with it
-            boolean free = Input.cursorFree(window);
+            boolean free = plat.cursorFree(window);
             if (input.rshiftPressed) {
                 if (edit) endEdit();
                 else if (free) startEdit();
@@ -65,7 +72,7 @@ public final class Overlay implements LongConsumer {
             boolean hintOn = hint != null && now < hintUntil;
             boolean showHud = (cfg.enabled && !hidden) || edit;
             if (!showHud && !hintOn) return;
-            GLFW.glfwGetFramebufferSize(window, fbw, fbh);
+            plat.framebufferSize(window, fbw, fbh);
             int W = fbw[0], H = fbh[0];
             if (W < 64 || H < 64) return;
             gl.begin(W, H);
@@ -109,10 +116,10 @@ public final class Overlay implements LongConsumer {
     private Hud.Hit hit(String id) { for (Hud.Hit h : hits) if (h.id.equals(id)) return h; return null; }
 
     private void editFrame(int W, int H) {
-        GLFW.glfwGetWindowSize(window, winw, winh);
-        GLFW.glfwGetCursorPos(window, curx, cury);
+        plat.windowSize(window, winw, winh);
+        plat.cursor(window, curx, cury);
         float mx = (float) curx[0] * (winw[0] > 0 ? (float) W / winw[0] : 1f), my = (float) cury[0] * (winh[0] > 0 ? (float) H / winh[0] : 1f);
-        boolean down = GLFW.glfwGetMouseButton(window, 0) == 1;
+        boolean down = plat.mouse(window, 0);
         hoverId = null;
         for (int i = hits.size() - 1; i >= 0; i--) if (hits.get(i).contains(mx, my)) { hoverId = hits.get(i).id; break; }
         if (down && !wasDown && hoverId != null) { Hud.Hit h = hit(hoverId); dragId = hoverId; dragDx = mx - h.x; dragDy = my - h.y; }
@@ -149,7 +156,7 @@ public final class Overlay implements LongConsumer {
         started = true;
         File dir = cfgFile.getAbsoluteFile().getParentFile();
         Log.init(new File(dir != null && dir.getParentFile() != null ? dir.getParentFile() : new File("."), "vesper-hud.log"));
-        Log.info("overlay starting (config " + cfgFile.getAbsolutePath() + ")");
+        Log.info("overlay starting on " + platformName + " (config " + cfgFile.getAbsolutePath() + ")");
         GL.getCapabilities(); // throws when the game has no OpenGL context (for example a Vulkan renderer)
         Log.info("OpenGL: " + GL11.glGetString(0x1F02) + " on " + GL11.glGetString(0x1F01));
         if (!GL.getCapabilities().OpenGL32) throw new IllegalStateException("needs OpenGL 3.2");

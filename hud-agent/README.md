@@ -6,9 +6,10 @@ year-style versions such as 26.x).
 
 ## How it works
 
-* `Agent` (loaded by the JVM) adds one call to the start of LWJGL's `GLFW.glfwSwapBuffers(long)` with ASM.
-  Every Minecraft frame since 1.13 goes through that method, whatever the loader, and it is LWJGL's own class,
-  not a (renamed) Minecraft one. The call only names `java.base` types, so it works under Fabric's Knot,
+* `Agent` (loaded by the JVM) adds one call to the start of the function that presents each frame, with ASM:
+  LWJGL's `GLFW.glfwSwapBuffers(long)` for Minecraft 1.13 to 1.21.x, and `SDLVideo.SDL_GL_SwapWindow(long)` for
+  Minecraft 26.x, which opens its window with SDL3 instead of GLFW (its log says "SDL video driver"). Both are
+  LWJGL's own classes, not (renamed) Minecraft ones, so the loader does not matter. The call only names `java.base` types, so it works under Fabric's Knot,
   Forge/NeoForge's module loaders, or none.
 * The first frame loads `overlay.*` in a child of the loader that holds GLFW, so the overlay can see LWJGL.
 * Each frame the overlay reads the settings (`config/vesper-hud.json`, written by the launcher), reads keys and
@@ -44,7 +45,7 @@ Clicks still reach the menu underneath, so avoid starting a drag on a button.
 ## When nothing shows
 
 The agent prints `[Vesper HUD]` lines to the game's console and to `vesper-hud.log` in the game folder. In order, a
-healthy start prints: `agent loaded`, `hooked GLFW.glfwSwapBuffers`, `first frame reached the hook`, `OpenGL: ...`,
+healthy start prints: `agent loaded`, `hooked org.lwjgl.sdl.SDLVideo.SDL_GL_SwapWindow` (or `...glfw.GLFW.glfwSwapBuffers`), `first frame reached the hook`, `OpenGL: ...`,
 `overlay ready`, `first frame drawn`. Where it stops says why: no first line means the agent was not started; no
 second means GLFW was never loaded through the normal path; an error after `overlay starting` names the OpenGL call or
 the missing OpenGL context (a renderer that is not OpenGL cannot be drawn on this way).

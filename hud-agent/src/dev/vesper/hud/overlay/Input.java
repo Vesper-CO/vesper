@@ -1,7 +1,5 @@
 package dev.vesper.hud.overlay;
 
-import org.lwjgl.glfw.GLFW;
-
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,27 +25,25 @@ final class Input {
     boolean f1Pressed; // true for the one frame in which F1 went down
     boolean rshiftPressed, plusPressed, minusPressed; // same, for Right Shift (edit mode), + and -
 
-    void poll(long window, long nowNanos, File options) {
+    void poll(Platform p, long window, long nowNanos, File options) {
         if (nowNanos - lastRead > 10_000_000_000L || lastRead == 0) { lastRead = nowNanos; readBindings(options); }
         for (int i = 0; i < keys.length; i++) {
             Key k = keys[i];
-            down[i] = (k.mouse ? GLFW.glfwGetMouseButton(window, k.code) : GLFW.glfwGetKey(window, k.code)) == 1;
+            down[i] = k.mouse ? p.mouse(window, k.code) : p.key(window, k.code);
         }
         long ms = nowNanos / 1_000_000L;
-        boolean l = GLFW.glfwGetMouseButton(window, 0) == 1, r = GLFW.glfwGetMouseButton(window, 1) == 1;
+        boolean l = p.mouse(window, 0), r = p.mouse(window, 1);
         if (l && !wasLeft) left.addLast(ms);
         if (r && !wasRight) right.addLast(ms);
         wasLeft = l; wasRight = r;
-        boolean f1 = GLFW.glfwGetKey(window, 290) == 1;
+        boolean f1 = p.key(window, 290);
         f1Pressed = f1 && !wasF1;
         wasF1 = f1;
-        boolean sh = GLFW.glfwGetKey(window, 344) == 1, pl = GLFW.glfwGetKey(window, 61) == 1 || GLFW.glfwGetKey(window, 334) == 1, mi = GLFW.glfwGetKey(window, 45) == 1 || GLFW.glfwGetKey(window, 333) == 1;
+        boolean sh = p.key(window, 344), pl = p.key(window, 61) || p.key(window, 334), mi = p.key(window, 45) || p.key(window, 333);
         rshiftPressed = sh && !wasShift; plusPressed = pl && !wasPlus; minusPressed = mi && !wasMinus;
         wasShift = sh; wasPlus = pl; wasMinus = mi;
     }
 
-    /** The mouse pointer is free (a menu is open) rather than captured by the game for looking around. */
-    static boolean cursorFree(long window) { return GLFW.glfwGetInputMode(window, 0x33001) == 0x34001; }
 
     static int cps(ArrayDeque<Long> q, long nowNanos) {
         long cutoff = nowNanos / 1_000_000L - 1000;
