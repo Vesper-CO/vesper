@@ -37,7 +37,8 @@ public final class Overlay implements LongConsumer {
     private final double[] curx = new double[1], cury = new double[1];
 
     // edit mode
-    private boolean edit, dirty, wasDown;
+    private boolean edit, dirty, wasDown, panelHeld;
+    private final Panel panel = new Panel();
     private String dragId, hoverId, hint;
     private float dragDx, dragDy;
     private long hintUntil;
@@ -80,11 +81,8 @@ public final class Overlay implements LongConsumer {
                 Hud hud = new Hud(gl, font, stats, input, now);
                 if (showHud) hud.draw(cfg, W, H); else hud.unit = Math.max(0.5f, Math.min(W / 480f, H / 270f));
                 hits = hud.hits;
-                if (edit) {
-                    editFrame(W, H);
-                    hud.editChrome(W, H, dragId != null ? dragId : hoverId,
-                        cfg.enabled ? "HUD editor: drag an element, + / - to resize, Right Shift to save" : "The HUD is turned off in the launcher, so nothing is shown");
-                } else if (hintOn) hud.banner(W, hint);
+                if (edit) editFrame(hud, W, H);
+                else if (hintOn) hud.banner(W, H, hint);
             } finally { gl.end(); }
             if (!firstDrawLogged) { firstDrawLogged = true; Log.info("first frame drawn: " + gl.lastQuads() + " quads at " + W + "x" + H); }
             if (!heartbeatLogged && ++frames == 300) { heartbeatLogged = true; Log.info("running: about " + stats.fps + " fps, " + hits.size() + " elements on screen"); }
@@ -115,14 +113,19 @@ public final class Overlay implements LongConsumer {
 
     private Hud.Hit hit(String id) { for (Hud.Hit h : hits) if (h.id.equals(id)) return h; return null; }
 
-    private void editFrame(int W, int H) {
+    private void editFrame(Hud hud, int W, int H) {
         plat.windowSize(window, winw, winh);
         plat.cursor(window, curx, cury);
         float mx = (float) curx[0] * (winw[0] > 0 ? (float) W / winw[0] : 1f), my = (float) cury[0] * (winh[0] > 0 ? (float) H / winh[0] : 1f);
-        boolean down = plat.mouse(window, 0);
+        boolean down = plat.mouse(window, 0), pressed = down && !wasDown;
+        boolean overPanel = panel.contains(mx, my) || (down && wasDown && panelHeld);
+        if (pressed) panelHeld = overPanel;
+        if (!down) panelHeld = false;
+
+        // pick and drag elements anywhere outside the panel
         hoverId = null;
-        for (int i = hits.size() - 1; i >= 0; i--) if (hits.get(i).contains(mx, my)) { hoverId = hits.get(i).id; break; }
-        if (down && !wasDown && hoverId != null) { Hud.Hit h = hit(hoverId); dragId = hoverId; dragDx = mx - h.x; dragDy = my - h.y; }
+        if (!overPanel) for (int i = hits.size() - 1; i >= 0; i--) if (hits.get(i).contains(mx, my)) { hoverId = hits.get(i).id; break; }
+        if (pressed && hoverId != null) { Hud.Hit h = hit(hoverId); dragId = hoverId; panel.selected = hoverId; dragDx = mx - h.x; dragDy = my - h.y; }
         if (down && dragId != null) {
             Hud.Hit h = hit(dragId);
             Config.El e = cfg.els.get(dragId);
@@ -131,13 +134,19 @@ public final class Overlay implements LongConsumer {
                 edited.add(dragId); dirty = true;
             }
         }
-        if (!down && wasDown) { dragId = null; if (dirty) save(); }
-        wasDown = down;
+        if (!down) dragId = null;
         String target = dragId != null ? dragId : hoverId;
         if (target != null && (input.plusPressed || input.minusPressed)) {
             Config.El e = cfg.els.get(target);
-            if (e != null) { e.scale = Math.max(0.5f, Math.min(3f, e.scale * (input.plusPressed ? 1.1f : 1f / 1.1f))); edited.add(target); dirty = true; save(); }
+            if (e != null) { e.scale = Math.max(0.5f, Math.min(3f, e.scale * (input.plusPressed ? 1.1f : 1f / 1.1f))); edited.add(target); dirty = true; }
         }
+
+        hud.editChrome(W, H, panel.selected, null);
+        if (panel.frame(hud, cfg, edited, W, H, mx, my, down, pressed)) dirty = true;
+        hud.banner(W, H, cfg.enabled ? "HUD editor: drag elements, use the panel to style them" : "The HUD is turned off in the launcher, so nothing is shown");
+        if (panel.done) { panel.done = false; endEdit(); wasDown = down; return; }
+        if (!down && dirty) save(); // save when the mouse is released, not on every frame of a drag
+        wasDown = down;
     }
 
     private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }

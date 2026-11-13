@@ -13,7 +13,8 @@ export async function render(el) {
     <div class="page-head"><div><h1>Settings</h1></div></div>
     <div class="card"><h3>Appearance</h3>
       <div class="row"><button class="btn ${s.theme === 'dark' ? 'primary' : ''}" data-theme="dark" style="display:inline-flex;align-items:center;gap:8px">${MOON}Dark</button><button class="btn ${s.theme === 'light' ? 'primary' : ''}" data-theme="light" style="display:inline-flex;align-items:center;gap:8px">${SUN}Light</button></div>
-      <p class="muted" style="margin:0">Dark is a starry night with a moon. Light is a sunny day.</p></div>
+      <p class="muted" style="margin:0">Dark is a starry night with a moon. Light is a sunny day.</p>
+      <div class="row" style="justify-content:space-between"><span>Christmas theme<br><small class="muted">Snow, Christmas trees, red and green. Works with dark and light.</small></span><button class="switch ${s.christmas ? 'on' : ''}" id="xmas" role="switch" aria-checked="${!!s.christmas}"></button></div></div>
     <h2>Game</h2>
     <div class="card">
       <label class="field"><span>Default memory for new instances: <b id="ramv">${ramLabel(s.default_ram_mb)}</b></span><input type="range" id="ram" min="1024" max="16384" step="512" value="${s.default_ram_mb}"></label>
@@ -28,6 +29,7 @@ export async function render(el) {
   </div>`;
   const save = async () => { try { await invoke('save_settings', { settings: S.settings }); } catch (e) { toast(errMsg(e), 'error'); } };
   el.querySelectorAll('[data-theme]').forEach((b) => b.onclick = async () => { S.settings.theme = b.dataset.theme; applyTheme(); await save(); render(el); });
+  $('#xmas').onclick = async () => { S.settings.christmas = !S.settings.christmas; applyTheme(); await save(); render(el); };
   $('#ram').oninput = (e) => { S.settings.default_ram_mb = +e.target.value; $('#ramv').textContent = ramLabel(+e.target.value); };
   $('#ram').onchange = save;
   $('#java').onchange = (e) => { S.settings.java_path = e.target.value; save(); };

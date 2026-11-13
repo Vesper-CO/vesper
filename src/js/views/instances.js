@@ -45,7 +45,7 @@ export async function render(el) {
         if (inst.hud) { await invoke('hud_set', { id, enabled: false }); toast('In-game HUD turned off for this instance', 'ok'); }
         else {
           await invoke('hud_set', { id, enabled: true });
-          toast(inst.loader === 'rust' ? 'In-game HUD turned on. Horizon draws it: press Edit HUD on its PvP & HUD page to adjust it in game.' : 'In-game HUD turned on. Style it on the In-game HUD page, or press Right Shift in a menu in game to drag it.', 'ok');
+          toast(inst.loader === 'rust' ? 'In-game HUD turned on. Horizon draws it: press Edit HUD on its PvP & HUD page to adjust it in game.' : 'In-game HUD turned on. Style it on the In-game HUD page, or press Right Shift in a menu in game to customise it there.', 'ok');
           if ((inst.loader === 'fabric' || inst.loader === 'quilt') && inst.mc_version === '1.21.4'
             && await ask('Also install the Fabric add-on? It adds coordinates, ping, direction, armor and potion effects.', 'Install')) {
             toast('Installing the add-on...'); await invoke('hud_install', { id }); toast('Add-on installed', 'ok');

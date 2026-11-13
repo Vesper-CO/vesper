@@ -22,6 +22,14 @@ final class Config {
         float bgOpacity = 0.55f, borderOpacity = 0.35f, borderWidth = 1f, radius = 4f, padding = 4f;
 
         El(boolean on, float x, float y, String tpl) { enabled = on; this.x = x; this.y = y; template = tpl; }
+
+        /** Copy the look of another element (colours, shape, text options). Position, on/off and the text itself stay. */
+        void copyStyle(El o, boolean withScale) {
+            if (withScale) scale = o.scale;
+            labelColor = o.labelColor; valueColor = o.valueColor; rainbow = o.rainbow; shadow = o.shadow;
+            bg = o.bg; bgOpacity = o.bgOpacity; border = o.border; borderOpacity = o.borderOpacity;
+            borderWidth = o.borderWidth; radius = o.radius; padding = o.padding;
+        }
     }
 
     boolean enabled = true;
@@ -67,8 +75,14 @@ final class Config {
             if (e == null) continue;
             Object o = els.get(id);
             Map<String, Object> m = o instanceof Map ? (Map<String, Object>) o : new LinkedHashMap<String, Object>();
+            m.put("enabled", e.enabled);
             m.put("x", (double) e.x); m.put("y", (double) e.y); m.put("scale", (double) e.scale);
-            if (!m.containsKey("enabled")) m.put("enabled", e.enabled);
+            if (!m.containsKey("template")) m.put("template", e.template);
+            m.put("labelColor", hexOf(e.labelColor)); m.put("valueColor", hexOf(e.valueColor));
+            m.put("rainbow", e.rainbow); m.put("shadow", e.shadow);
+            m.put("bg", hexOf(e.bg)); m.put("bgOpacity", (double) e.bgOpacity);
+            m.put("border", hexOf(e.border)); m.put("borderOpacity", (double) e.borderOpacity);
+            m.put("borderWidth", (double) e.borderWidth); m.put("radius", (double) e.radius); m.put("padding", (double) e.padding);
             els.put(id, m);
         }
         root.put("elements", els);
@@ -108,6 +122,8 @@ final class Config {
         }
         return c;
     }
+
+    static String hexOf(int rgb) { return String.format("#%06x", rgb & 0xFFFFFF); }
 
     private static float num(Object o, float lo, float hi, float d) {
         if (!(o instanceof Number)) return d;

@@ -160,12 +160,18 @@ final class Hud {
             font.rect(sink, hit.x, cy, hit.x + cw, cy + ch, on ? 0xF08F7CFF : 0xD00B0B17);
             font.text(sink, n, hit.x + 3 * unit, baseline(cy, ch, fs), fs, 0xFFFFFFFF);
         }
-        if (banner != null) banner(W, banner);
+        if (banner != null) banner(W, H, banner);
     }
 
-    /** A message box at the top centre of the screen. */
-    void banner(int W, String text) {
-        float fs = 8f * unit, pad = 5f * unit, w = font.width(text, fs) + 2 * pad, h = 9f * unit + 2 * pad, x = (W - w) / 2f, y = 6f * unit;
+    // small drawing helpers for the in-game panel
+    void fill(float x, float y, float w, float h, float r, int argb) { roundedFill(x, y, w, h, r, argb); }
+    float textWidth(String s, float fs) { return font.width(s, fs); }
+    /** Text vertically centred in a box of height h whose top is y. */
+    void text(String s, float x, float y, float h, float fs, int argb) { font.text(sink, s, x, baseline(y, h, fs), fs, argb); }
+
+    /** A message box at the bottom centre of the screen. */
+    void banner(int W, int H, String text) {
+        float fs = 8f * unit, pad = 5f * unit, w = font.width(text, fs) + 2 * pad, h = 9f * unit + 2 * pad, x = (W - w) / 2f, y = H - h - 8f * unit;
         font.rect(sink, x, y, x + w, y + h, 0xE60B0B17);
         font.rect(sink, x, y, x + w, y + unit, 0xFF8F7CFF);
         font.text(sink, text, x + pad, baseline(y + pad, 9f * unit, fs), fs, 0xFFFFFFFF);

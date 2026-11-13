@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Settings {
     pub theme: String,
+    /// The Christmas theme (snow, trees, red and green) on top of dark or light.
+    pub christmas: bool,
     pub default_ram_mb: u32,
     /// Optional: use this java.exe instead of Mojang's runtime.
     pub java_path: String,
@@ -15,7 +17,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { theme: "dark".into(), default_ram_mb: 4096, java_path: String::new(), auto_update: true, discord_presence: true }
+        Self { theme: "dark".into(), christmas: false, default_ram_mb: 4096, java_path: String::new(), auto_update: true, discord_presence: true }
     }
 }
 

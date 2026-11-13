@@ -8,7 +8,9 @@
 // plain drawImage calls, not SVG rendering.
 const DW = 1500, DH = 900;
 const rnd = (a, b) => a + Math.random() * (b - a);
-const NAMES = ['sky', 'sun', 'sun-rays', 'cloud-1', 'cloud-2', 'cloud-3', 'hills-back', 'hills-mid', 'hills-front', 'tree'];
+const NAMES = ['sky', 'sun', 'sun-rays', 'cloud-1', 'cloud-2', 'cloud-3', 'hills-back', 'hills-mid', 'hills-front', 'tree',
+  // the Christmas theme's own art lives in assets/xmas/ (names start with "xmas-")
+  'xmas-sky', 'xmas-hills-back', 'xmas-hills-mid', 'xmas-hills-front', 'xmas-tree', 'xmas-tree-night'];
 // Hill images are cropped to save memory: [left x, top y, width, height] in the 1500x900 design space.
 const HILLS = [['hills-back', -80, 610, 1730, 390, 6], ['hills-mid', -80, 685, 1730, 315, 12], ['hills-front', -80, 765, 1730, 235, 22]];
 const CLOUDS = [['cloud-1', 420, 120], ['cloud-2', 300, 100], ['cloud-3', 520, 140]];
@@ -24,7 +26,7 @@ export function createDay({ layers, groundAt, onReady }) {
       const im = new Image(); im.decoding = 'async';
       im.onload = () => { ready[n] = im; onReady?.(); };
       im.onerror = () => console.warn('missing day asset', n);
-      im.src = `assets/day/${n}.svg`;
+      im.src = n.startsWith('xmas-') ? `assets/xmas/${n.slice(5)}.svg` : `assets/day/${n}.svg`;
     }
   }
 
@@ -58,11 +60,12 @@ export function createDay({ layers, groundAt, onReady }) {
   function draw(ctx, e) {
     load();
     const { t, dt, W, H, dpr, scale, ox, oy, k, mx, my, cx, cy, alpha, rise } = e;
+    const X = !!e.xmas, P = X ? 'xmas-' : ''; // Christmas: snowy art, no butterflies or dust, a paler sun
     const A = (a = 1) => (ctx.globalAlpha = a * alpha);
 
     // sky (screen space)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const sky = sprite('sky', W, H, dpr);
+    const sky = sprite(P + 'sky', W, H, dpr);
     A();
     if (sky) ctx.drawImage(sky, 0, 0, W, H);
     else { const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#4fa9f5'); g.addColorStop(0.7, '#bfe6ff'); g.addColorStop(1, '#fff1c9'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
@@ -78,15 +81,15 @@ export function createDay({ layers, groundAt, onReady }) {
     const RAY = 900, SUN = 470;
     const rays = sprite('sun-rays', RAY, RAY, k);
     if (rays) {
-      ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.035); A(0.9 + Math.sin(t * 0.9) * 0.1);
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.035); A((0.9 + Math.sin(t * 0.9) * 0.1) * (X ? 0.45 : 1));
       ctx.drawImage(rays, -RAY / 2, -RAY / 2, RAY, RAY); ctx.restore();
     }
     const disc = sprite('sun', SUN, SUN, k);
-    if (disc) { const pulse = 1 + Math.sin(t * 0.8) * 0.012; A(); ctx.drawImage(disc, sx - (SUN * pulse) / 2, sy - (SUN * pulse) / 2, SUN * pulse, SUN * pulse); }
+    if (disc) { const pulse = 1 + Math.sin(t * 0.8) * 0.012; A(X ? 0.9 : 1); ctx.drawImage(disc, sx - (SUN * pulse) / 2, sy - (SUN * pulse) / 2, SUN * pulse, SUN * pulse); }
 
     // sunlit dust floating up
     ctx.fillStyle = '#fffbe0';
-    for (const m of motes) {
+    if (!X) for (const m of motes) {
       m.y -= m.v * dt; if (m.y < 60) { m.y = 820; m.x = rnd(0, DW); }
       A(0.25 + 0.35 * Math.sin(t * m.s + m.p) ** 2);
       ctx.beginPath(); ctx.arc(m.x - mx * 6 + Math.sin(t * 0.4 + m.p) * 14, m.y - my * 4, m.r, 0, 6.283); ctx.fill();
@@ -112,10 +115,10 @@ export function createDay({ layers, groundAt, onReady }) {
     // hills back to front; oaks and butterflies live on the middle layer
     HILLS.forEach(([name, x, y, w, h, par], i) => {
       const dx = -mx * par, dy = -my * par * 0.5;
-      const sp = sprite(name, w, h, k);
+      const sp = sprite(P + name, w, h, k);
       if (sp) { A(); ctx.drawImage(sp, x + dx, y + dy, w, h); }
       if (i !== 1) return;
-      const tree = sprite('tree', 120, 210, k);
+      const tree = sprite(P + 'tree', 120, 210, k);
       if (tree) {
         for (const tx of [150, 470, 900, 1300]) {
           const g = groundAt(layers[1], tx) + 24 + dy;
@@ -123,7 +126,7 @@ export function createDay({ layers, groundAt, onReady }) {
           ctx.drawImage(tree, -60, -210, 120, 210); ctx.restore();
         }
       }
-      for (const f of flies) {
+      if (!X) for (const f of flies) {
         f.p += dt * f.s;
         f.vx += Math.cos(f.p) * 16 * dt; f.vy += Math.sin(f.p * 1.3) * 12 * dt;
         const ddx = f.x - cx, ddy = f.y - cy, d2 = ddx * ddx + ddy * ddy;
@@ -142,9 +145,10 @@ export function createDay({ layers, groundAt, onReady }) {
   // Bake every sprite ahead of time so switching to Light doesn't have to do it on the first frame.
   function warm({ W, H, dpr, k }) {
     sprite('sky', W, H, dpr); sprite('sun-rays', 900, 900, k); sprite('sun', 470, 470, k); sprite('tree', 120, 210, k);
-    for (const [n, , , w, h] of HILLS) sprite(n, w, h, k);
+    sprite('xmas-sky', W, H, dpr); sprite('xmas-tree', 120, 210, k); sprite('xmas-tree-night', 120, 210, k);
+    for (const [n, , , w, h] of HILLS) { sprite(n, w, h, k); sprite('xmas-' + n, w, h, k); }
     for (const [n, w, h] of CLOUDS) sprite(n, w * 1.25, h * 1.25, k);
   }
 
-  return { draw, load, warm };
+  return { draw, load, warm, sprite };
 }

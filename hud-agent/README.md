@@ -37,10 +37,21 @@ rasteriser. The OpenGL calls themselves can only be checked in a real game.
 
 ## Editing in game
 
-With a menu open (Esc), press **Right Shift**: every element gets an outline. Drag one to move it (it snaps to the
-screen's edges and centre), hover one and press **+** or **-** to resize it, and press Right Shift again (or go back
-to the game) to save into `config/vesper-hud.json`. The launcher notices the newer file and uses it as its own copy.
-Clicks still reach the menu underneath, so avoid starting a drag on a button.
+With a menu open (Esc), press **Right Shift**: every element gets an outline and a panel opens on the right with the
+same settings as the launcher's In-game HUD page, in four small tabs:
+
+* **Elements**: show or hide each one, pick which to edit, and apply a style preset to all (Vesper Night, Vesper Day,
+  Glass, Transparent, Neon).
+* **Text**: label and value colour (16 swatches plus a hue strip), rainbow text, shadow, size.
+* **Background**: colour, opacity, and "Fully transparent" / "Solid".
+* **Border**: colour, opacity, width, corner roundness, padding.
+
+Drag any element to move it (it snaps to the edges and centre); hover one and press **+** or **-** to resize it.
+"Use for all" copies the look of the selected element to the others, "Reset" restores its defaults, and "Done" (or
+Right Shift again, or going back to the game) finishes. Changes save when you let go of the mouse into
+`config/vesper-hud.json`, and the launcher uses that file as its own copy. The text of an element ({v} templates) is
+edited in the launcher, because typing needs the keyboard. Clicks still reach the menu underneath, so avoid starting a
+drag on a button.
 
 ## When nothing shows
 

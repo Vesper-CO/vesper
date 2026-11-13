@@ -31,6 +31,25 @@ export function startBackground(canvas) {
   const root = document.documentElement;
   const target = () => (root.dataset.theme === 'light' ? 1 : 0);
   let mix = target(), raf = 0, bakeK = 1, bakeTimer = 0;
+  const xmasOn = () => root.dataset.xmas === 'on';
+  // Christmas theme: falling snow in front of everything, snow-capped hills and decorated trees (assets/xmas)
+  const snow = Array.from({ length: 150 }, () => ({ x: rnd(0, DW), y: rnd(0, DH), r: rnd(1.3, 3.8), v: rnd(26, 72), p: rnd(0, 6.28), s: rnd(0.4, 1.2), a: rnd(0.6, 1) }));
+  const LIGHTS = [[59, 64], [69, 80], [53, 96], [62, 112], [78, 112], [46, 128], [56, 144], [80, 144], [36, 160], [65, 160], [46, 176], [86, 176], [62, 48]]; // bauble centres on tree.svg
+  const LIGHT_COLORS = ['255,77,90', '255,215,94', '95,224,138']; // red, gold, green
+  const SNOW_CAPS = ['#9aa7e0', '#8593d2', '#6a77bb']; // moonlit snow on the night hills, back to front
+  function drawSnow(t, dt, mx, my, day) {
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+    for (const f of snow) {
+      f.y += f.v * dt; f.x += (Math.sin(t * f.s + f.p) * 14 + 7) * dt;
+      if (f.y > DH + 10) { f.y = -10; f.x = rnd(0, DW); }
+      if (f.x > DW + 10) f.x = -10;
+      const x = f.x - mx * (2 + f.r * 2), y = f.y - my * f.r;
+      ctx.globalAlpha = f.a * (0.8 + 0.2 * Math.sin(t * 2 + f.p));
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, f.r, 0, 6.283); ctx.fill();
+      if (day) { ctx.globalAlpha *= 0.5; ctx.strokeStyle = 'rgba(110,150,190,.7)'; ctx.lineWidth = 0.8; ctx.stroke(); } // keeps flakes visible on the pale sky
+    }
+    ctx.globalAlpha = 1;
+  }
   const smooth = (x) => x * x * (3 - 2 * x);
   const kick = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(frame); };
   const day = createDay({ layers, groundAt, onReady: () => { day.warm({ W, H, dpr, k: bakeK }); if (reduce) kick(); } });
@@ -69,8 +88,9 @@ export function startBackground(canvas) {
     const tg = target();
     mix = tg; // theme changes are instant
     const d = smooth(mix);
-    if (d > 0) day.draw(ctx, { t, dt, W, H, dpr, scale, ox, oy, k: bakeK, mx, my, cx: (mouse.px - ox) / scale, cy: (mouse.py - oy) / scale, alpha: d, rise: 0, reduce });
+    if (d > 0) day.draw(ctx, { t, dt, W, H, dpr, scale, ox, oy, k: bakeK, mx, my, cx: (mouse.px - ox) / scale, cy: (mouse.py - oy) / scale, alpha: d, rise: 0, reduce, xmas: xmasOn() });
     if (d < 1) night(t, dt, mx, my, d);
+    if (xmasOn()) drawSnow(t, dt, mx, my, d > 0.5);
     ctx.globalAlpha = 1;
     if (!reduce) raf = requestAnimationFrame(frame);
   }
@@ -121,14 +141,31 @@ export function startBackground(canvas) {
       const dx = -mx * L.par, dy = -my * L.par * 0.5;
       ctx.globalAlpha = 1; ctx.fillStyle = L.color;
       for (const [x, h] of L.cols) ctx.fillRect(x + dx, h + dy, L.step * 2 + 1, DH + 400 - h);
-      if (i === 1) {
+      const xmas = xmasOn();
+      if (xmas) { ctx.fillStyle = SNOW_CAPS[i]; for (const [x, h] of L.cols) ctx.fillRect(x + dx, h + dy, L.step * 2 + 1, L.step * 1.1); }
+      if (i === 1 && xmas) {
+        // decorated trees; their baubles glow in turn
+        const img = day.sprite('xmas-tree-night', 120, 210, bakeK);
+        for (const tx of [150, 470, 900, 1300]) {
+          const g = groundAt(L, tx) + 24 + dy;
+          ctx.save(); ctx.translate(tx + dx + 6, g); ctx.rotate(Math.sin(t * 0.8 + tx) * 0.012);
+          if (img) ctx.drawImage(img, -60, -210, 120, 210);
+          LIGHTS.forEach(([lx, ly], n) => {
+            const c = LIGHT_COLORS[n % 3], a = 0.25 + 0.75 * Math.pow(Math.sin(t * 2.2 + n * 1.7 + tx), 2);
+            const gl = ctx.createRadialGradient(lx - 60, ly - 210, 0, lx - 60, ly - 210, 13);
+            gl.addColorStop(0, `rgba(${c},${a})`); gl.addColorStop(1, `rgba(${c},0)`);
+            ctx.globalAlpha = 1; ctx.fillStyle = gl; ctx.fillRect(lx - 73, ly - 223, 26, 26);
+          });
+          ctx.restore();
+        }
+      } else if (i === 1) {
         ctx.fillStyle = '#120f33';
         for (const tx of [150, 470, 900, 1300]) {
           const g = groundAt(L, tx) + 20 + dy, x = tx + dx, sway = Math.sin(t * 0.8 + tx) * 1.2;
           ctx.fillRect(x, g - 110, 12, 110); ctx.fillRect(x - 24 + sway, g - 170, 60, 32); ctx.fillRect(x - 12 + sway, g - 202, 36, 32); ctx.fillRect(x - 24 + sway, g - 138, 60, 30);
         }
       }
-      if (i === 1) {
+      if (i === 1 && !xmas) {
         // fireflies float between the middle and front hills and flee from the cursor
         const cx = (mouse.px - ox) / scale, cy = (mouse.py - oy) / scale;
         for (const f of flies) {
@@ -147,6 +184,6 @@ export function startBackground(canvas) {
   }
   if (reduce) frame(1000); else kick();
   // Switching theme redraws right away.
-  new MutationObserver(kick).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  new MutationObserver(kick).observe(root, { attributes: true, attributeFilter: ['data-theme', 'data-xmas'] });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduce) { last = 0; kick(); } });
 }
