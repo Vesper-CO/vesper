@@ -75,7 +75,7 @@ final class Panel {
         if (!down) dragging = false;
         else if (pressed && hit(px, py, pw - 22f * u, 19f * u)) { dragging = true; grabX = mx - px; grabY = my - py; }
         if (dragging) { px = mx - grabX; py = my - grabY; }
-        place(W, H);
+        place(W, H, !dragging);
         if (dragging || !Float.isNaN(userX)) { userX = px; userY = py; }
 
         // card: halo, glass body, thin outline, accent line along the top
@@ -113,11 +113,11 @@ final class Panel {
         return changed;
     }
 
-    /** Keep the panel on the screen and off the game's own buttons (it moves to whichever side of them is nearer). */
-    private void place(int W, int H) {
+    /** Keep the panel on the screen and, once it is let go, off the game's own buttons (it moves to whichever side of them is nearer). */
+    private void place(int W, int H, boolean offButtons) {
         px = Math.max(0f, Math.min(W - pw, px));
         py = Math.max(0f, Math.min(H - ph, py));
-        if (avoid == null) return;
+        if (avoid == null || !offButtons) return;
         float m = 2f * u;
         boolean overlaps = px < avoid[0] + avoid[2] + m && px + pw > avoid[0] - m && py < avoid[1] + avoid[3] + m && py + ph > avoid[1] - m;
         if (!overlaps) return;

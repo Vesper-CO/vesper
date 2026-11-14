@@ -50,7 +50,11 @@ final class GlSurface implements Hud.Sink {
         + "  if (vLoc.z < 2.5) return clamp(0.5 - d, 0.0, 1.0) * clamp(d + vSh.w + 0.5, 0.0, 1.0);\n"
         + "  float t = 1.0 - clamp(d / max(vSh.w, 0.001), 0.0, 1.0); return t * t;\n"
         + "}\n"
-        + "void main() { vec4 c = vCol * texture(atlas, vUv); c.a *= cover(); outColor = c; }\n";
+        + "void main() {\n"
+        + "  vec2 dx = dFdx(vUv) * 0.25, dy = dFdy(vUv) * 0.25;\n"
+        + "  vec4 t = 0.25 * (texture(atlas, vUv + dx + dy) + texture(atlas, vUv + dx - dy) + texture(atlas, vUv - dx + dy) + texture(atlas, vUv - dx - dy));\n"
+        + "  vec4 c = vCol * t; c.a *= cover(); outColor = c;\n"
+        + "}\n\n";
 
     GlSurface(Font font) {
         whiteU = ((95 % font.cols) * font.cellW + font.cellW / 2f) / font.texW;
@@ -71,9 +75,7 @@ final class GlSurface implements Hud.Sink {
         int oldAlign = GL11.glGetInteger(0x0CF5);
         GL11.glPixelStorei(0x0CF5, 1);
         GL11.glTexImage2D(0x0DE1, 0, 0x1908, font.texW, font.texH, 0, 0x1908, 0x1401, px);
-        // the atlas is baked large and drawn smaller: mipmaps keep small text smooth instead of shimmering
-        GL30.glGenerateMipmap(0x0DE1);
-        GL11.glTexParameteri(0x0DE1, 0x2801, 0x2703); // minify: trilinear
+        GL11.glTexParameteri(0x0DE1, 0x2801, 0x2601); // minify: linear (the shader averages a few taps, see FS)
         GL11.glPixelStorei(0x0CF5, oldAlign);
         GL11.glBindTexture(0x0DE1, oldTex);
         GL13.glActiveTexture(oldActive);

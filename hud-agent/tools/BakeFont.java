@@ -5,7 +5,7 @@ import java.io.*;
 /** Bakes ASCII 32..126 of a TTF into the overlay's font atlas (src/.../overlay/font.bin). Run once; the result is committed. */
 public class BakeFont {
     public static void main(String[] a) throws Exception {
-        final int SIZE = 64, CW = 72, CH = 88, BASE = 68, PADX = 4, COLS = 16, ROWS = 6;
+        final int SIZE = 48, CW = 54, CH = 66, BASE = 51, PADX = 3, COLS = 16, ROWS = 6;
         Font font = Font.createFont(Font.TRUETYPE_FONT, new File(a[0])).deriveFont((float) SIZE);
         BufferedImage atlas = new BufferedImage(COLS * CW, ROWS * CH, BufferedImage.TYPE_INT_ARGB);
         int[] adv = new int[96];
