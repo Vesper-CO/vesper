@@ -177,6 +177,105 @@ final class Hud {
         font.text(sink, text, x + pad, baseline(y + pad, 9f * unit, fs), fs, 0xFFFFFFFF);
     }
 
+    // ----- editor styling helpers -----
+
+    /** A rounded outline (the border part of a box), `bw` thick. */
+    void ring(float x, float y, float w, float h, float r, float bw, int argb) {
+        if ((argb >>> 24) == 0 || bw <= 0) return;
+        r = Math.max(0f, Math.min(r, Math.min(w, h) / 2f));
+        font.rect(sink, x + r, y, x + w - r, y + bw, argb);
+        font.rect(sink, x + r, y + h - bw, x + w - r, y + h, argb);
+        font.rect(sink, x, y + r, x + bw, y + h - r, argb);
+        font.rect(sink, x + w - bw, y + r, x + w, y + h - r, argb);
+        int n = Math.max(1, Math.min(8, (int) Math.ceil(r)));
+        for (int i = 0; i < n && r > 0; i++) { // the four rounded corners, as short runs along the curve
+            float y0 = r * i / n, y1 = r * (i + 1) / n, dy = r - (y0 + y1) / 2f;
+            float inset = r - (float) Math.sqrt(Math.max(0, r * r - dy * dy));
+            float nextDy = r - y1, nextInset = r - (float) Math.sqrt(Math.max(0, r * r - nextDy * nextDy));
+            float run = Math.max(bw, nextInset - inset);
+            font.rect(sink, x + inset, y + y0, x + inset + run, y + y1, argb);
+            font.rect(sink, x + w - inset - run, y + y0, x + w - inset, y + y1, argb);
+            font.rect(sink, x + inset, y + h - y1, x + inset + run, y + h - y0, argb);
+            font.rect(sink, x + w - inset - run, y + h - y1, x + w - inset, y + h - y0, argb);
+        }
+    }
+
+    /** Like fill, but only the top corners are rounded (a highlight across the top of a button). */
+    void fillTop(float x, float y, float w, float h, float r, int argb) {
+        if ((argb >>> 24) == 0) return;
+        r = Math.max(0f, Math.min(r, Math.min(w, h)));
+        if (r < 0.5f) { font.rect(sink, x, y, x + w, y + h, argb); return; }
+        font.rect(sink, x, y + r, x + w, y + h, argb);
+        int n = Math.max(1, Math.min(8, (int) Math.ceil(r)));
+        for (int i = 0; i < n; i++) {
+            float y0 = r * i / n, y1 = r * (i + 1) / n, dy = r - (y0 + y1) / 2f;
+            float inset = r - (float) Math.sqrt(Math.max(0, r * r - dy * dy));
+            font.rect(sink, x + inset, y + y0, x + w - inset, y + y1, argb);
+        }
+    }
+
+    /** A soft halo around a rounded box: a few widening, fading outlines. */
+    void glow(float x, float y, float w, float h, float r, float spread, int rgb, int alpha) {
+        for (int i = 3; i >= 1; i--) {
+            float g = spread * i / 3f;
+            roundedFill(x - g, y - g, w + 2 * g, h + 2 * g, r + g, (alpha * (4 - i) / 6 << 24) | (rgb & 0xFFFFFF));
+        }
+    }
+
+    /** The Vesper logo (a moon and a spark) on its dark rounded tile, `s` pixels wide. */
+    void logo(float x, float y, float s, boolean bright) {
+        glow(x, y, s, s, s * 0.22f, s * 0.18f, 0x8F7CFF, bright ? 0x50 : 0x2C);
+        roundedFill(x, y, s, s, s * 0.22f, Logo.BACKGROUND);
+        mark(x, y, s);
+    }
+
+    /** Just the moon and the spark, drawn row by row from the logo's runs, in the logo's colours. */
+    void mark(float x, float y, float s) {
+        float k = s / Logo.SIZE, rh = Logo.SIZE / (float) Logo.ROWS;
+        short[] r = Logo.RUNS;
+        for (int i = 0; i < r.length; i += 4) {
+            float y0 = y + r[i] * rh * k, y1 = y + (r[i] + 1) * rh * k, x0 = x + r[i + 2] * k, x1 = x + r[i + 3] * k;
+            int c;
+            if (r[i + 1] == 2) c = 0xFFFFFFFF;
+            else { // the moon fades from light lilac (top left) to the accent (bottom right)
+                float t = Math.max(0f, Math.min(1f, ((r[i + 2] + r[i + 3]) / 2f - 80f + (r[i] + 0.5f) * rh - 130f) / 560f));
+                int rr = Math.round(0xB3 + (0x88 - 0xB3) * t), gg = Math.round(0xA7 + (0x76 - 0xA7) * t), bb = Math.round(0xFF + (0xFB - 0xFF) * t);
+                c = 0xFF000000 | (rr << 16) | (gg << 8) | bb;
+            }
+            font.rect(sink, x0, y0, x1, y1, c);
+        }
+    }
+
+    /** The small square button added to the pause menu, in the spirit of the game's own icon buttons. */
+    void pauseButton(float x, float y, float s, boolean hover) {
+        float g = s / 20f; // one GUI pixel
+        if (hover) glow(x, y, s, s, g, 2.5f * g, 0x8F7CFF, 0x70);
+        font.rect(sink, x, y, x + s, y + s, 0xFF0A0916);
+        font.rect(sink, x + g, y + g, x + s - g, y + s - g, hover ? 0xFF2A2559 : Logo.BACKGROUND);
+        font.rect(sink, x + g, y + g, x + s - g, y + 2 * g, hover ? 0xFF8F7CFF : 0xFF3A3470);               // lit top edge
+        font.rect(sink, x + g, y + g, x + 2 * g, y + s - g, hover ? 0xFF8F7CFF : 0xFF3A3470);               // lit left edge
+        font.rect(sink, x + g, y + s - 2 * g, x + s - g, y + s - g, 0x66000000);                            // shaded bottom
+        font.rect(sink, x + s - 2 * g, y + g, x + s - g, y + s - g, 0x44000000);                            // shaded right
+        mark(x + 1.5f * g, y + 1.5f * g, s - 3f * g);
+    }
+
+    /** A tooltip in the game's own style (dark box, purple edge), sized by the game's GUI scale `gs`. */
+    void tooltip(String text, float cx, float y, float gs, int W, int H) {
+        float fs = 8f * gs, pad = 4f * gs, w = font.width(text, fs) + 2 * pad, h = 9f * gs + 2 * pad;
+        float x = Math.max(2 * gs, Math.min(W - w - 2 * gs, cx - w / 2f));
+        y = Math.max(2 * gs, Math.min(H - h - 2 * gs, y));
+        glow(x, y, w, h, gs, 2f * gs, 0x8F7CFF, 0x30);
+        font.rect(sink, x, y, x + w, y + h, 0xF00D0B1E);
+        ring(x, y, w, h, 0f, gs, 0xE08F7CFF);
+        font.text(sink, text, x + pad, baseline(y + pad, 9f * gs, fs), fs, 0xFFFFFFFF);
+    }
+
+    /** A little sample of an element's look, centred on (cx, cy): used by the preset tiles. */
+    void sample(Config.El e, String value, float cx, float cy, float su) {
+        Block b = text(e, su, value);
+        b.draw(cx - b.w / 2f, cy - b.h / 2f);
+    }
+
     // ----- boxes -----
 
     private static int withAlpha(int rgb, float opacity) { return (Math.round(Math.max(0f, Math.min(1f, opacity)) * 255f) << 24) | (rgb & 0xFFFFFF); }

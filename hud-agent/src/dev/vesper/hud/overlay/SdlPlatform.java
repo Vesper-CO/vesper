@@ -40,6 +40,7 @@ final class SdlPlatform implements Platform {
         if (k >= 290 && k <= 301) return 58 + (k - 290);      // F1-F12
         switch (k) {
             case 32: return 44;   // space
+            case 256: return 41;  // escape
             case 340: return 225; case 344: return 229; // shifts
             case 341: return 224; case 345: return 228; // controls
             case 342: return 226; case 346: return 230; // alts

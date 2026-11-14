@@ -16,8 +16,9 @@ import java.util.function.LongConsumer;
  * which is the one point every Minecraft version, on every mod loader, passes through. Everything here is wrapped
  * so a failure disables the overlay instead of ever reaching the game.
  *
- * Edit mode: with a menu open (the pointer is free), Right Shift lets you drag the elements, + and - resize the
- * one under the pointer, and Right Shift again (or going back to the game) saves.
+ * Edit mode: open the pause menu (Esc) and click the Vesper button next to the game's own small buttons (or press
+ * Right Shift in any menu). Then drag the elements, use the menu on the right, and press Done (or leave the menu)
+ * to save.
  */
 public final class Overlay implements LongConsumer {
     private final Platform plat;
@@ -37,7 +38,14 @@ public final class Overlay implements LongConsumer {
     private final double[] curx = new double[1], cury = new double[1];
 
     // edit mode
-    private boolean edit, dirty, wasDown, panelHeld;
+    private boolean edit, dirty, wasDown, prevDown, panelHeld;
+    private float ptrX, ptrY;
+    private boolean ptrDown, ptrPressed;
+
+    // pause menu: the Vesper button shows while the pause menu is the open screen
+    private boolean pause, wasFree;
+    private long escAt = -1_000_000_000_000L;
+    private int depth; // screens opened from the pause menu (the button hides while another screen is on top)
     private final Panel panel = new Panel();
     private String dragId, hoverId, hint;
     private float dragDx, dragDy;
@@ -64,17 +72,20 @@ public final class Overlay implements LongConsumer {
             input.poll(plat, window, now, optionsFile);
             if (input.f1Pressed) hidden = !hidden; // F1 hides the game's own HUD, so hide ours with it
             boolean free = plat.cursorFree(window);
+            trackMenu(free, now);
             if (input.rshiftPressed) {
                 if (edit) endEdit();
                 else if (free) startEdit();
-                else { hint = "Open the pause menu (Esc), then press Right Shift to edit the HUD"; hintUntil = now + 3_000_000_000L; }
+                else { hint = "Open the pause menu (Esc), then click the Vesper button to edit the HUD"; hintUntil = now + 3_000_000_000L; }
             }
             if (edit && !free) endEdit(); // back in the game: finish and save
-            boolean hintOn = hint != null && now < hintUntil;
-            boolean showHud = (cfg.enabled && !hidden) || edit;
-            if (!showHud && !hintOn) return;
             plat.framebufferSize(window, fbw, fbh);
             int W = fbw[0], H = fbh[0];
+            if (free) readPointer(W, H); else { wasDown = false; prevDown = false; ptrDown = false; ptrPressed = false; }
+            boolean hintOn = hint != null && now < hintUntil;
+            boolean button = free && pause && !edit && depth == 0;
+            boolean showHud = (cfg.enabled && !hidden) || edit;
+            if (!showHud && !hintOn && !button) return;
             if (W < 64 || H < 64) return;
             gl.begin(W, H);
             try {
@@ -82,7 +93,10 @@ public final class Overlay implements LongConsumer {
                 if (showHud) hud.draw(cfg, W, H); else hud.unit = Math.max(0.5f, Math.min(W / 480f, H / 270f));
                 hits = hud.hits;
                 if (edit) editFrame(hud, W, H);
-                else if (hintOn) hud.banner(W, H, hint);
+                else {
+                    if (button) pauseButton(hud, W, H);
+                    if (hintOn) hud.banner(W, H, hint);
+                }
             } finally { gl.end(); }
             if (!firstDrawLogged) { firstDrawLogged = true; Log.info("first frame drawn: " + gl.lastQuads() + " quads at " + W + "x" + H); }
             if (!heartbeatLogged && ++frames == 300) { heartbeatLogged = true; Log.info("running: about " + stats.fps + " fps, " + hits.size() + " elements on screen"); }
@@ -93,9 +107,55 @@ public final class Overlay implements LongConsumer {
         }
     }
 
+    // ----- pause menu button -----
+
+    /**
+     * Tell when the pause menu is the open screen: the pointer was freed within a moment of Esc being pressed (the
+     * inventory, chat and other screens free it without Esc). Clicks on the game's own buttons may open another
+     * screen, so the button hides until Esc brings the pause menu back.
+     */
+    private void trackMenu(boolean free, long now) {
+        if (input.escPressed) {
+            escAt = now;
+            if (pause) { if (depth > 0) depth--; else pause = false; }
+        }
+        if (free && !wasFree) { pause = now - escAt < 600_000_000L; depth = 0; }
+        if (!free) { pause = false; depth = 0; }
+        wasFree = free;
+    }
+
+    private void readPointer(int W, int H) {
+        plat.windowSize(window, winw, winh);
+        plat.cursor(window, curx, cury);
+        ptrX = (float) curx[0] * (winw[0] > 0 ? (float) W / winw[0] : 1f);
+        ptrY = (float) cury[0] * (winh[0] > 0 ? (float) H / winh[0] : 1f);
+        ptrDown = plat.mouse(window, 0);
+        prevDown = wasDown;
+        ptrPressed = ptrDown && !prevDown;
+        wasDown = ptrDown;
+    }
+
+    private int guiScale(int W, int H) { return PauseMenu.guiScale(W, H, input.guiScale); }
+
+    private void pauseButton(Hud hud, int W, int H) {
+        int s = guiScale(W, H);
+        float[] r = PauseMenu.button(W, H, s, "sdl".equals(platformName));
+        boolean over = PauseMenu.inside(r, ptrX, ptrY, r[2]);
+        hud.pauseButton(r[0], r[1], r[2], over);
+        if (over) hud.tooltip("Vesper HUD editor", r[0] + r[2] / 2f, r[1] + r[2] + 3f * s, s, W, H);
+        if (!ptrPressed) return;
+        if (over) { startEdit(); ptrPressed = false; }
+        else if (insideBlock(W, H, s)) depth++;
+    }
+
+    private boolean insideBlock(int W, int H, int s) {
+        float[] b = PauseMenu.block(W, H, s);
+        return ptrX >= b[0] && ptrX <= b[0] + b[2] && ptrY >= b[1] && ptrY <= b[1] + b[3];
+    }
+
     // ----- edit mode -----
 
-    private void startEdit() { edit = true; dirty = false; dragId = null; edited.clear(); Log.info("edit mode on"); }
+    private void startEdit() { edit = true; dirty = false; dragId = null; edited.clear(); panel.done = false; Log.info("edit mode on"); }
 
     private void endEdit() {
         edit = false; dragId = null; hoverId = null;
@@ -114,11 +174,10 @@ public final class Overlay implements LongConsumer {
     private Hud.Hit hit(String id) { for (Hud.Hit h : hits) if (h.id.equals(id)) return h; return null; }
 
     private void editFrame(Hud hud, int W, int H) {
-        plat.windowSize(window, winw, winh);
-        plat.cursor(window, curx, cury);
-        float mx = (float) curx[0] * (winw[0] > 0 ? (float) W / winw[0] : 1f), my = (float) cury[0] * (winh[0] > 0 ? (float) H / winh[0] : 1f);
-        boolean down = plat.mouse(window, 0), pressed = down && !wasDown;
-        boolean overPanel = panel.contains(mx, my) || (down && wasDown && panelHeld);
+        float mx = ptrX, my = ptrY;
+        boolean down = ptrDown, pressed = ptrPressed;
+        panel.minX = PauseMenu.freeX(W, guiScale(W, H));
+        boolean overPanel = panel.contains(mx, my) || (down && prevDown && panelHeld);
         if (pressed) panelHeld = overPanel;
         if (!down) panelHeld = false;
 
@@ -143,10 +202,9 @@ public final class Overlay implements LongConsumer {
 
         hud.editChrome(W, H, panel.selected, null);
         if (panel.frame(hud, cfg, edited, W, H, mx, my, down, pressed)) dirty = true;
-        hud.banner(W, H, cfg.enabled ? "HUD editor: drag elements, use the panel to style them" : "The HUD is turned off in the launcher, so nothing is shown");
-        if (panel.done) { panel.done = false; endEdit(); wasDown = down; return; }
+        hud.banner(W, H, cfg.enabled ? "Drag items to move them  |  + and - resize" : "The HUD is switched off: turn on Show the HUD in the menu");
+        if (panel.done) { panel.done = false; endEdit(); return; }
         if (!down && dirty) save(); // save when the mouse is released, not on every frame of a drag
-        wasDown = down;
     }
 
     private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }

@@ -20,10 +20,13 @@ final class Input {
     private static final String[] OPTION = { "key_key.forward", "key_key.left", "key_key.back", "key_key.right", "key_key.attack", "key_key.use", "key_key.jump" };
     final boolean[] down = new boolean[7];
     private final ArrayDeque<Long> left = new ArrayDeque<Long>(), right = new ArrayDeque<Long>();
-    private boolean wasLeft, wasRight, wasF1, wasShift, wasPlus, wasMinus;
+    private boolean wasLeft, wasRight, wasF1, wasShift, wasPlus, wasMinus, wasEsc;
     private long lastRead;
     boolean f1Pressed; // true for the one frame in which F1 went down
     boolean rshiftPressed, plusPressed, minusPressed; // same, for Right Shift (edit mode), + and -
+    boolean escPressed; // same, for Escape (how we tell that the pause menu just opened)
+    /** The player's GUI scale setting from options.txt (0 = automatic). */
+    int guiScale;
 
     void poll(Platform p, long window, long nowNanos, File options) {
         if (nowNanos - lastRead > 10_000_000_000L || lastRead == 0) { lastRead = nowNanos; readBindings(options); }
@@ -42,6 +45,9 @@ final class Input {
         boolean sh = p.key(window, 344), pl = p.key(window, 61) || p.key(window, 334), mi = p.key(window, 45) || p.key(window, 333);
         rshiftPressed = sh && !wasShift; plusPressed = pl && !wasPlus; minusPressed = mi && !wasMinus;
         wasShift = sh; wasPlus = pl; wasMinus = mi;
+        boolean esc = p.key(window, 256);
+        escPressed = esc && !wasEsc;
+        wasEsc = esc;
     }
 
 
@@ -64,6 +70,8 @@ final class Input {
                 String v = m.get(OPTION[i]);
                 if (v != null) apply(keys[i], v);
             }
+            String gs = m.get("guiScale");
+            if (gs != null && gs.matches("\\d{1,2}")) guiScale = Integer.parseInt(gs);
         } catch (Exception ignored) { /* keep the defaults */ }
     }
 

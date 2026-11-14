@@ -37,21 +37,27 @@ rasteriser. The OpenGL calls themselves can only be checked in a real game.
 
 ## Editing in game
 
-With a menu open (Esc), press **Right Shift**: every element gets an outline and a panel opens on the right with the
-same settings as the launcher's In-game HUD page, in four small tabs:
+Open the pause menu (Esc) and click the **V** button next to the game's own small icon buttons (in 26.x it joins the
+row of bug / feedback / friends / report icons; in older versions it sits beside "Back to Game"). Hovering shows
+"Vesper HUD editor". Right Shift in any menu still works as a shortcut. Every element gets an outline and the Vesper
+menu opens on the right, in four small tabs:
 
-* **Elements**: show or hide each one, pick which to edit, and apply a style preset to all (Vesper Night, Vesper Day,
-  Glass, Transparent, Neon).
-* **Text**: label and value colour (16 swatches plus a hue strip), rainbow text, shadow, size.
-* **Background**: colour, opacity, and "Fully transparent" / "Solid".
-* **Border**: colour, opacity, width, corner roundness, padding.
+* **Elements**: a switch for the whole HUD, a switch per element, and the size of the selected one.
+* **Looks**: Vesper Night, Vesper Day, Glass, Transparent and Neon, each shown as a live sample. One click restyles all.
+* **Colors**: one picker for whichever part you choose (Label, Value, Fill or Border), rainbow text, shadow, opacity.
+* **Shape**: border width, corner roundness, padding.
 
+The **Editing** row picks the element the next change goes to (arrows), or **All** to change every element at once.
 Drag any element to move it (it snaps to the edges and centre); hover one and press **+** or **-** to resize it.
-"Use for all" copies the look of the selected element to the others, "Reset" restores its defaults, and "Done" (or
-Right Shift again, or going back to the game) finishes. Changes save when you let go of the mouse into
-`config/vesper-hud.json`, and the launcher uses that file as its own copy. The text of an element ({v} templates) is
-edited in the launcher, because typing needs the keyboard. Clicks still reach the menu underneath, so avoid starting a
-drag on a button.
+**Reset** restores the defaults, and **Done** (or the x, or leaving the menu) finishes. Changes save when you let go
+of the mouse into `config/vesper-hud.json`, and the launcher uses that file as its own copy. The text of an element
+({v} templates) is edited in the launcher, because typing needs the keyboard.
+
+The button is placed by calculation (`PauseMenu.java`): the pause menu is laid out the same way in every version, from
+the window size and the GUI scale in options.txt. The button only shows while the pause menu is open (the overlay sees
+Esc open it) and hides when you open another screen from it. On a server whose pause menu has an extra row (server
+links) the button can sit one row off. Clicks still reach the menu underneath, so the editor panel stays in the empty
+space to the right of the game's buttons.
 
 ## When nothing shows
 

@@ -66,7 +66,7 @@ final class Config {
         try { if (f.isFile()) { Object o = Json.parse(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8)); if (o instanceof Map) root = (Map<String, Object>) o; } }
         catch (RuntimeException ignored) { /* unreadable: start a fresh file */ }
         if (!root.containsKey("version")) root.put("version", 1.0);
-        if (!root.containsKey("enabled")) root.put("enabled", Boolean.TRUE);
+        root.put("enabled", enabled); // the editor has a switch for the whole HUD
         if (!root.containsKey("scale")) root.put("scale", 1.0);
         Object eo = root.get("elements");
         Map<String, Object> els = eo instanceof Map ? (Map<String, Object>) eo : new LinkedHashMap<String, Object>();

@@ -16,7 +16,7 @@ export async function render(el) {
   H = mergeHud(await invoke('get_hud').catch(() => null));
   if (!meta(sel)) sel = 'fps';
   el.innerHTML = `<div class="page">
-    <div class="page-head"><div><h1>In-game HUD</h1><p class="muted">Drag the elements, then style each one. Changes are saved as you go and show up in a running game within a couple of seconds. You can also change everything in game: open a menu (Esc), press Right Shift, and use the panel.</p></div>
+    <div class="page-head"><div><h1>In-game HUD</h1><p class="muted">Drag the elements, then style each one. Changes are saved as you go and show up in a running game within a couple of seconds. You can also change everything in game: open the pause menu (Esc) and click the Vesper button next to the small icon buttons.</p></div>
       <div class="actions"><small class="muted" id="hud-status"></small><button class="btn" id="hud-reset">Reset all</button></div></div>
     <div class="hud-layout">
       <div class="hud-left">
