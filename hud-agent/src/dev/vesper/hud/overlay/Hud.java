@@ -244,17 +244,15 @@ final class Hud {
     }
 
     /**
-     * Just the moon and the spark, over a Logo.BACKGROUND coloured surface: a lilac disc with a disc of the surface colour
-     * cut out of it, and the spark. All of it is smooth shapes, so it stays sharp at any size.
+     * Just the moon and the spark: a lilac crescent (one shape, so nothing is painted over the surface) and the spark.
+     * All of it is smooth shapes, so it stays sharp at any size.
      */
     void mark(float x, float y, float s) {
         if (!sink.shapes()) return;
         float k = s / Logo.SIZE;
-        float ar = Logo.A[2] * k, br = Logo.B[2] * k;
-        sink.shape(x + (Logo.A[0] - Logo.A[2] - 1) * k, y + (Logo.A[1] - Logo.A[2] - 1) * k, x + (Logo.A[0] + Logo.A[2] + 1) * k, y + (Logo.A[1] + Logo.A[2] + 1) * k,
-            x + (Logo.A[0] - Logo.A[2]) * k, y + (Logo.A[1] - Logo.A[2]) * k, 2 * ar, 2 * ar, ar, 0, 1, 0xFFB7ABFF, 0xFF8574FA);
-        sink.shape(x + (Logo.B[0] - Logo.B[2] - 1) * k, y + (Logo.B[1] - Logo.B[2] - 1) * k, x + (Logo.B[0] + Logo.B[2] + 1) * k, y + (Logo.B[1] + Logo.B[2] + 1) * k,
-            x + (Logo.B[0] - Logo.B[2]) * k, y + (Logo.B[1] - Logo.B[2]) * k, 2 * br, 2 * br, br, 0, 1, Logo.BACKGROUND, Logo.BACKGROUND);
+        float ar = Logo.A[2] * k;
+        float ax = x + Logo.A[0] * k, ay = y + Logo.A[1] * k;
+        sink.shape(ax - ar - 1, ay - ar - 1, ax + ar + 1, ay + ar + 1, ax - ar, ay - ar, 2 * ar, 2 * ar, ar, 0, 5, 0xFFB7ABFF, 0xFF8574FA);
         float sx = Logo.STAR[0] * k, sy = Logo.STAR[1] * k, sh = Logo.STAR[2] * k;
         sink.shape(x + sx - sh - 1, y + sy - sh - 1, x + sx + sh + 1, y + sy + sh + 1, x + sx - sh, y + sy - sh, 2 * sh, 2 * sh, 0, 0, 4, 0xFFFFFFFF, 0xFFFFFFFF);
     }

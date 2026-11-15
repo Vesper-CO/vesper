@@ -86,6 +86,10 @@ public class RenderTest {
     static float spark(float px, float py, float hw, float hh) { return (float) (Math.pow(Math.abs(px) / hw, 0.65) + Math.pow(Math.abs(py) / hh, 0.65) - 1.0); }
     static float cover(float px, float py, float hw, float hh, float r, float w, int mode) {
         if (mode == 4) return 1f;
+        if (mode == 5) {
+            float da = (float) Math.hypot(px, py) - hw, db = (float) Math.hypot(px - 0.7119f * hw, py + 0.4963f * hw) - 0.8225f * hw;
+            return Math.max(0f, Math.min(1f, 0.5f - da)) * Math.max(0f, Math.min(1f, db + 0.5f));
+        }
         float qx = Math.abs(px) - hw + r, qy = Math.abs(py) - hh + r;
         float d = (float) Math.hypot(Math.max(qx, 0f), Math.max(qy, 0f)) + Math.min(Math.max(qx, qy), 0f) - r;
         if (mode == 1) return Math.max(0f, Math.min(1f, 0.5f - d));

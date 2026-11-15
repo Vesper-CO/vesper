@@ -1,6 +1,7 @@
 package org.lwjgl.opengl;
 import java.nio.ByteBuffer;
 public final class GL11 {
+    public static void glTexSubImage2D(int t, int l, int x, int y, int w, int h, int f, int ty, java.nio.ByteBuffer b) { }
     public static volatile int drawCalls, quadVertices, textures;
     public static int glGetInteger(int p) { return 0; }
     public static void glGetIntegerv(int p, int[] v) { }

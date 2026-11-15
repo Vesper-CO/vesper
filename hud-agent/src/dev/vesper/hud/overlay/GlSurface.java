@@ -37,12 +37,13 @@ final class GlSurface implements Hud.Sink {
     /**
      * Text and plain rectangles sample the atlas. Shapes (rounded boxes, outlines, halos, the logo's spark) are worked
      * out per pixel from a distance to the shape's edge, which gives smooth anti-aliased edges at any size:
-     * mode 1 fill, 2 outline `w` thick, 3 halo fading over `w`, 4 spark.
+     * mode 1 fill, 2 outline `w` thick, 3 halo fading over `w`, 4 spark, 5 the logo's crescent moon.
      */
     private static final String FS = "#version 150\nin vec2 vUv; in vec4 vCol; in vec4 vSh; in vec3 vLoc; out vec4 outColor; uniform sampler2D atlas;\n"
         + "float cover() {\n"
         + "  if (vLoc.z < 0.5) return 1.0;\n"
         + "  vec2 p = vLoc.xy;\n"
+        + "  if (vLoc.z > 4.5) { float r = vSh.x; float da = length(p) - r; float db = length(p - vec2(0.7119, -0.4963) * r) - 0.8225 * r; return clamp(0.5 - da, 0.0, 1.0) * clamp(db + 0.5, 0.0, 1.0); }\n"
         + "  if (vLoc.z > 3.5) { vec2 q = abs(p) / vSh.xy; float f = pow(q.x, 0.65) + pow(q.y, 0.65) - 1.0; return clamp(0.5 - f / max(fwidth(f), 0.0001), 0.0, 1.0); }\n"
         + "  vec2 q = abs(p) - vSh.xy + vec2(vSh.z);\n"
         + "  float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - vSh.z;\n"
@@ -52,7 +53,8 @@ final class GlSurface implements Hud.Sink {
         + "}\n"
         + "void main() {\n"
         + "  vec2 dx = dFdx(vUv) * 0.25, dy = dFdy(vUv) * 0.25;\n"
-        + "  vec4 t = 0.25 * (texture(atlas, vUv + dx + dy) + texture(atlas, vUv + dx - dy) + texture(atlas, vUv - dx + dy) + texture(atlas, vUv - dx - dy));\n"
+        + "  vec4 t = vec4(1.0);\n"
+        + "  if (vLoc.z < 0.5) t = 0.25 * (textureLod(atlas, vUv + dx + dy, 0.0) + textureLod(atlas, vUv + dx - dy, 0.0) + textureLod(atlas, vUv - dx + dy, 0.0) + textureLod(atlas, vUv - dx - dy, 0.0));\n"
         + "  vec4 c = vCol * t; c.a *= cover(); outColor = c;\n"
         + "}\n\n";
 
@@ -72,11 +74,20 @@ final class GlSurface implements Hud.Sink {
         ByteBuffer px = BufferUtils.createByteBuffer(font.texW * font.texH * 4);
         for (int i = 0; i < font.alpha.length; i++) { px.put((byte) 255).put((byte) 255).put((byte) 255).put(font.alpha[i]); }
         px.flip();
-        int oldAlign = GL11.glGetInteger(0x0CF5);
-        GL11.glPixelStorei(0x0CF5, 1);
-        GL11.glTexImage2D(0x0DE1, 0, 0x1908, font.texW, font.texH, 0, 0x1908, 0x1401, px);
+        // The game leaves its own texture-upload settings behind (row length, skips, alignment). Take them out of the picture:
+        // reset them for this upload, and send the atlas one row at a time, so a stray row length cannot shear it.
+        int[] store = { 0x0CF5, 0x0CF2, 0x0CF3, 0x0CF4, 0x806E, 0x806D }; // alignment, row length, skip rows, skip pixels, image height, skip images
+        int[] old = new int[store.length];
+        for (int i = 0; i < store.length; i++) { old[i] = GL11.glGetInteger(store[i]); GL11.glPixelStorei(store[i], i == 0 ? 1 : 0); }
+        GL11.glTexImage2D(0x0DE1, 0, 0x1908, font.texW, font.texH, 0, 0x1908, 0x1401, (ByteBuffer) null);
+        for (int row = 0; row < font.texH; row++) {
+            ByteBuffer line = px.duplicate();
+            line.limit((row + 1) * font.texW * 4);
+            line.position(row * font.texW * 4);
+            GL11.glTexSubImage2D(0x0DE1, 0, 0, row, font.texW, 1, 0x1908, 0x1401, line);
+        }
         GL11.glTexParameteri(0x0DE1, 0x2801, 0x2601); // minify: linear (the shader averages a few taps, see FS)
-        GL11.glPixelStorei(0x0CF5, oldAlign);
+        for (int i = 0; i < store.length; i++) GL11.glPixelStorei(store[i], old[i]);
         GL11.glBindTexture(0x0DE1, oldTex);
         GL13.glActiveTexture(oldActive);
         GL15.glBindBuffer(0x88EC, oldPub);
