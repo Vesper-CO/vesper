@@ -421,7 +421,9 @@ document.documentElement.classList.add('js');
   }
   resize();
   if (!reduce) requestAnimationFrame(frame);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduce) { last = 0; requestAnimationFrame(frame); } });
+  // The browser pauses the loop in a hidden tab and resumes the same one, so don't start another (that doubled the speed
+  // on every tab switch); just forget the time of the last frame.
+  document.addEventListener('visibilitychange', () => { last = 0; });
 })();
 
 // ---- cursor spotlight and gentle tilt on cards, like the app
