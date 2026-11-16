@@ -260,12 +260,18 @@ fn item_place(i: &Item) -> Place {
     }
 }
 
-/// "builtin" (a native mod compiled into the installed client), "ok" (installable), "native" (a native
-/// mod that is not in the client), "code" (a code mod the game no longer runs),
+/// "builtin" (a native mod compiled into the installed client), "ok" (installable), "pending" (a native mod that is
+/// in Vesper's newest build but not in the installed one yet), "native" (a native mod that is in no build), "code" (a code mod the game no longer runs),
 /// "version" (nothing for this Minecraft version), "other" (a kind that is not installed here: modpacks, worlds...).
-fn support(p: &Project, revoked: &[Revoked], game: &str) -> &'static str {
+fn support(p: &Project, revoked: &[Revoked], game: &str, latest: &HashSet<String>) -> &'static str {
     if p.kind == "native-mod" {
-        return if crate::rust::builtin_ids().contains(&p.id) { "builtin" } else { "native" };
+        return if crate::rust::builtin_ids().contains(&p.id) {
+            "builtin"
+        } else if latest.contains(&p.id) {
+            "pending"
+        } else {
+            "native"
+        };
     }
     if !matches!(p.kind.as_str(), "mod" | "resourcepack" | "shader" | "shaderpack") {
         return "other";
@@ -460,7 +466,7 @@ async fn download_checked(f: &File, kind: &str, key: Option<&str>) -> Result<Vec
 }
 
 async fn install_one(inst: &str, game: &str, p: &Project, revoked: &[Revoked]) -> Result<()> {
-    match support(p, revoked, game) {
+    match support(p, revoked, game, &HashSet::new()) {
         "ok" => {}
         "builtin" => bail!("{} is already built into the game.", p.name),
         "native" => bail!("{} is a native mod: it has to be compiled into the game, and is not in this build of it. Vesper's client is rebuilt every week with the native mods the library lists.", p.name),
@@ -516,22 +522,29 @@ fn hit(p: &Project, support: &str, installed: Option<&Item>, game: &str, revoked
     })
 }
 
+/// Ids of the native mods in Vesper's newest published build (empty when unknown).
+async fn latest_ids() -> HashSet<String> {
+    crate::rust::latest_mods().await.iter().filter_map(|m| m["id"].as_str().map(String::from)).collect()
+}
+
 /// The groups of the Horizon page: content mods, native mods, and packs (resource and shader).
 fn in_group(p: &Project, group: &str) -> bool {
     match group {
         "native" => p.kind == "native-mod",
+        "mods" => matches!(p.kind.as_str(), "mod" | "native-mod"),
         "packs" => matches!(p.kind.as_str(), "resourcepack" | "shader" | "shaderpack"),
         _ => p.kind == "mod",
     }
 }
 
-/// `kind` is "mod", "native" or "packs"; `sort` is "relevance", "downloads", "stars", "updated", "new" or "name";
+/// `kind` is "mods" (content and native mods together), "mod", "native" or "packs"; `sort` is "relevance", "downloads", "stars", "updated", "new" or "name";
 /// `category` is one of the categories this call returns, or empty.
 #[tauri::command]
 pub async fn horizon_search(instance_id: String, query: String, kind: String, sort: String, category: String, offset: usize) -> CmdResult<Value> {
     let inst = load_rust_instance(&instance_id)?;
     let (projects, revoked, new) = library().await?;
     let items = read_items(&instance_id);
+    let latest: HashSet<String> = latest_ids().await;
     let words: Vec<String> = query.to_lowercase().split_whitespace().map(String::from).collect();
     let group: Vec<&Project> = projects.iter().filter(|p| in_group(p, &kind)).collect();
     // The categories of this group, most used first, so the page can offer them as a filter.
@@ -553,7 +566,7 @@ pub async fn horizon_search(instance_id: String, query: String, kind: String, so
             words.iter().all(|w| hay.contains(w.as_str()))
         })
         .collect();
-    let rank = |p: &Project| match support(p, &revoked, &inst.mc_version) { "builtin" => 0, "ok" => 1, _ => 2 };
+    let rank = |p: &Project| match support(p, &revoked, &inst.mc_version, &latest) { "builtin" => 0, "ok" | "pending" => 1, _ => 2 };
     match sort.as_str() {
         "downloads" => found.sort_by_key(|p| std::cmp::Reverse(p.downloads)),
         "stars" => found.sort_by_key(|p| (std::cmp::Reverse(p.stars), std::cmp::Reverse(p.downloads))),
@@ -565,19 +578,20 @@ pub async fn horizon_search(instance_id: String, query: String, kind: String, so
     }
     let total = found.len();
     let built: HashSet<String> = crate::rust::builtin_ids().into_iter().collect();
+    let pending = latest.iter().filter(|i| !built.contains(*i)).count();
     let hits: Vec<Value> = found
         .into_iter()
         .skip(offset)
         .take(PAGE)
         .map(|p| {
-            let mut h = hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked, &new);
+            let mut h = hit(p, support(p, &revoked, &inst.mc_version, &latest), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked, &new);
             if built.contains(&p.id) {
                 h["on"] = json!(native_on(&instance_id, &p.id));
             }
             h
         })
         .collect();
-    Ok(json!({ "hits": hits, "total": total, "categories": categories }))
+    Ok(json!({ "hits": hits, "total": total, "categories": categories, "pending": pending }))
 }
 
 #[tauri::command]
@@ -586,7 +600,8 @@ pub async fn horizon_project(instance_id: String, id: String) -> CmdResult<Value
     let (projects, revoked, new) = library().await?;
     let p = projects.iter().find(|p| p.id == id).ok_or_else(|| anyhow!("That mod is not in the library"))?;
     let items = read_items(&instance_id);
-    let mut v = hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked, &new);
+    let latest = latest_ids().await;
+    let mut v = hit(p, support(p, &revoked, &inst.mc_version, &latest), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked, &new);
     v["description"] = json!(p.description);
     v["license"] = json!(p.license);
     v["source"] = json!(p.source);

@@ -117,6 +117,7 @@ fn main() {
             launch::running_instances,
             presence::presence_available,
             presence::presence_page,
+            rust::rust_update_build,
             horizon_mods::horizon_search,
             horizon_mods::horizon_project,
             horizon_mods::horizon_install,

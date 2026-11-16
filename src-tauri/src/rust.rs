@@ -97,6 +97,64 @@ pub fn builtin_ids() -> Vec<String> {
     builtin_mods().iter().filter_map(|m| m.get("id").and_then(|i| i.as_str()).map(String::from)).collect()
 }
 
+const MODS_ASSET: &str = "vesper-mods.json";
+fn latest_path() -> PathBuf { paths::rust().join("latest-mods.json") }
+
+#[derive(Serialize, Deserialize, Default)]
+struct LatestCache {
+    checked: u64,
+    mods: Vec<Value>,
+}
+
+/// The native mods in Vesper's newest published build, read from the small `vesper-mods.json` the build workflow
+/// publishes beside the zip (its hash is in the signed SHA256SUMS). This lets the Mod Library tell the player which
+/// mods an update brings without downloading the whole build. Cached for a few minutes; empty when unknown.
+pub async fn latest_mods() -> Vec<Value> {
+    let cached: Option<LatestCache> = std::fs::read(latest_path()).ok().and_then(|b| serde_json::from_slice(&b).ok());
+    if let Some(c) = &cached {
+        if now().saturating_sub(c.checked) < RECHECK_SECS {
+            return c.mods.clone();
+        }
+    }
+    match fetch_latest_mods().await {
+        Ok(mods) => {
+            let _ = std::fs::create_dir_all(paths::rust());
+            if let Ok(b) = serde_json::to_vec(&LatestCache { checked: now(), mods: mods.clone() }) {
+                let _ = std::fs::write(latest_path(), b);
+            }
+            mods
+        }
+        Err(_) => cached.map(|c| c.mods).unwrap_or_default(),
+    }
+}
+
+async fn fetch_latest_mods() -> Result<Vec<Value>> {
+    if VESPER_KEY.is_empty() || cfg!(target_arch = "aarch64") {
+        return Ok(vec![]);
+    }
+    let sums = http_bytes(&format!("{VESPER_BASE}/SHA256SUMS")).await?;
+    let sig = http_bytes(&format!("{VESPER_BASE}/SHA256SUMS.sig")).await.ok().and_then(|b| String::from_utf8(b).ok());
+    verify_vesper(&sums, sig.as_deref())?;
+    let want = digest_for(&sums, MODS_ASSET)?; // a release from before this file existed has none: nothing is known
+    let bytes = http_bytes(&format!("{VESPER_BASE}/{MODS_ASSET}")).await?;
+    if hex::encode(Sha256::digest(&bytes)) != want {
+        bail!("{MODS_ASSET} did not match the signed checksums");
+    }
+    let v: Value = serde_json::from_slice(&bytes)?;
+    Ok(v.get("mods").and_then(|m| m.as_array().cloned()).unwrap_or_default())
+}
+
+/// Download Vesper's newest Rust build now (instead of on the next Play), so the Mod Library shows its native mods
+/// as built in. Returns how many native mods the installed build has afterwards.
+#[tauri::command]
+pub async fn rust_update_build(app: AppHandle) -> crate::error::CmdResult<usize> {
+    let (id, vesper) = fetch_latest(&app).await?;
+    save_state(&State { build: id.clone(), checked: now(), vesper });
+    prune(&id);
+    let _ = std::fs::remove_file(latest_path());
+    Ok(builtin_ids().len())
+}
+
 /// Whether the installed client shows its own Discord presence (singleplayer, multiplayer, dimension...).
 /// The build workflow records it in `vesper-mods.json` (`"discord": true`) when it was built with
 /// Vesper's Discord application id. Older builds have no such file, so no.
