@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod auth;
+mod curseforge;
 mod download;
 mod error;
 mod horizon_mods;
@@ -136,6 +137,13 @@ fn main() {
             modrinth::modrinth_toggle,
             modrinth::modrinth_remove,
             modrinth::modrinth_update_all,
+            curseforge::curseforge_available,
+            curseforge::curseforge_categories,
+            curseforge::curseforge_search,
+            curseforge::curseforge_project,
+            curseforge::curseforge_install,
+            curseforge::curseforge_install_modpack,
+            curseforge::curseforge_update_all,
             optimize::perf_info,
             optimize::optimize_instance,
             hud::get_hud,

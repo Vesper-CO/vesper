@@ -11,7 +11,7 @@ use tauri::AppHandle;
 
 const API: &str = "https://api.modrinth.com/v2";
 
-fn kind_dir(kind: &str) -> Result<&'static str> {
+pub(crate) fn kind_dir(kind: &str) -> Result<&'static str> {
     Ok(match kind {
         "mod" => "mods",
         "resourcepack" => "resourcepacks",
@@ -21,7 +21,7 @@ fn kind_dir(kind: &str) -> Result<&'static str> {
 }
 
 /// Loaders whose mods run on this instance (Quilt can load Fabric mods).
-fn loaders_for(inst: &Instance) -> Vec<&'static str> {
+pub(crate) fn loaders_for(inst: &Instance) -> Vec<&'static str> {
     match inst.loader.as_str() {
         "fabric" => vec!["fabric"],
         "quilt" => vec!["quilt", "fabric"],
@@ -46,13 +46,16 @@ pub struct Item {
     /// Computed when listing, never trusted from disk.
     #[serde(default)]
     pub enabled: bool,
+    /// Where it came from: empty for Modrinth, "curseforge" for CurseForge.
+    #[serde(default)]
+    pub source: String,
 }
 
 fn manifest_path(id: &str) -> PathBuf { paths::instance_dir(id).join("vesper-content.json") }
-fn read_items(id: &str) -> Vec<Item> {
+pub(crate) fn read_items(id: &str) -> Vec<Item> {
     std::fs::read(manifest_path(id)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
-fn write_items(id: &str, items: &[Item]) -> Result<()> {
+pub(crate) fn write_items(id: &str, items: &[Item]) -> Result<()> {
     std::fs::write(manifest_path(id), serde_json::to_vec_pretty(items)?)?;
     Ok(())
 }
@@ -137,7 +140,7 @@ async fn place_version(app: &AppHandle, inst: &Instance, pid: &str, title: &str,
             let _ = std::fs::remove_file(dir.join(format!("{}.disabled", old.filename)));
         }
     }
-    items.push(Item { project_id: pid.into(), version_id: ver["id"].as_str().unwrap_or("").into(), title: title.into(), kind: kind.into(), filename, sha1, icon: icon.into(), version_name: ver["version_number"].as_str().unwrap_or("").into(), enabled: true });
+    items.push(Item { project_id: pid.into(), version_id: ver["id"].as_str().unwrap_or("").into(), title: title.into(), kind: kind.into(), filename, sha1, icon: icon.into(), version_name: ver["version_number"].as_str().unwrap_or("").into(), enabled: true, source: String::new() });
     write_items(&inst.id, &items)
 }
 
@@ -236,7 +239,7 @@ pub fn modrinth_installed(instance_id: String) -> CmdResult<Vec<Item>> {
                 if known.contains(&base) || !base.ends_with(ext) {
                     continue;
                 }
-                items.push(Item { project_id: String::new(), version_id: String::new(), title: base.clone(), kind: kind.into(), filename: base, sha1: String::new(), icon: String::new(), version_name: String::new(), enabled: !name.ends_with(".disabled") });
+                items.push(Item { project_id: String::new(), version_id: String::new(), title: base.clone(), kind: kind.into(), filename: base, sha1: String::new(), icon: String::new(), version_name: String::new(), enabled: !name.ends_with(".disabled"), source: String::new() });
             }
         }
     }
@@ -277,7 +280,7 @@ pub fn modrinth_remove(instance_id: String, kind: String, filename: String) -> C
 #[tauri::command]
 pub async fn modrinth_update_all(app: AppHandle, instance_id: String) -> CmdResult<usize> {
     let inst = instances::load(&instance_id)?;
-    let items: Vec<Item> = read_items(&instance_id).into_iter().filter(|i| !i.sha1.is_empty()).collect();
+    let items: Vec<Item> = read_items(&instance_id).into_iter().filter(|i| !i.sha1.is_empty() && i.source != "curseforge").collect();
     let mut updated = 0;
     for kind in ["mod", "resourcepack", "shader"] {
         if inst.loader == "rust" && kind == "mod" {

@@ -13,11 +13,13 @@ pub struct Settings {
     pub auto_update: bool,
     /// Show what is being played on the player's Discord profile.
     pub discord_presence: bool,
+    /// Personal CurseForge API key (free at console.curseforge.com). Needed to browse CurseForge.
+    pub curseforge_api_key: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { theme: "dark".into(), christmas: false, default_ram_mb: 4096, java_path: String::new(), auto_update: true, discord_presence: true }
+        Self { theme: "dark".into(), christmas: false, default_ram_mb: 4096, java_path: String::new(), auto_update: true, discord_presence: true, curseforge_api_key: String::new() }
     }
 }
 

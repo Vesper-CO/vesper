@@ -5,7 +5,9 @@ import { go } from '../shell.js';
 
 const TYPES = [['mod', 'Mods'], ['resourcepack', 'Resource packs'], ['shader', 'Shaders'], ['modpack', 'Modpacks'], ['installed', 'Installed']];
 const SORTS = [['relevance', 'Most relevant'], ['downloads', 'Most downloaded'], ['follows', 'Most followed'], ['newest', 'Newest'], ['updated', 'Recently updated']];
-const M = { type: 'mod', q: '', cat: '', sort: 'relevance', compat: true, offset: 0, hits: [], total: 0, cats: null, busy: false };
+const M = { type: 'mod', source: 'modrinth', q: '', cat: '', sort: 'relevance', compat: true, offset: 0, hits: [], total: 0, cats: null, ccats: {}, busy: false };
+// CurseForge descriptions are HTML: keep paragraph and list breaks before md() strips the tags.
+const cfHtml = (h = '') => String(h).replace(/<\/(p|div|li|h[1-6]|tr|ul|ol)>/gi, '\n').replace(/<li[^>]*>/gi, '- ').replace(/&nbsp;/g, ' ');
 const LOADER_COMPAT = { fabric: ['fabric'], quilt: ['quilt', 'fabric'], forge: ['forge'], neoforge: ['neoforge'], vanilla: [] };
 const RUST_TYPES = [['mod', 'Mods'], ['native', 'Native mods'], ['packs', 'Horizon packs'], ['resourcepack', 'Resource packs'], ['shader', 'Shaders'], ['installed', 'Installed']];
 const HORIZON_TABS = ['mod', 'native', 'packs'];
@@ -27,12 +29,12 @@ export async function render(el) {
   if (isRust(inst) && M.type === 'modpack') M.type = 'mod';
   if (!isRust(inst) && HORIZON_TABS.includes(M.type) && M.type !== 'mod') M.type = 'mod';
   el.innerHTML = `<div class="page">
-    <div class="page-head"><div><h1>Mod Library</h1><p class="muted">${isRust(inst) ? 'The whole Horizon library, plus packs from Modrinth' : 'Powered by Modrinth'}</p></div>
+    <div class="page-head"><div><h1>Mod Library</h1><p class="muted">${isRust(inst) ? 'The whole Horizon library, plus packs from Modrinth and CurseForge' : 'Powered by Modrinth and CurseForge'}</p></div>
       <label class="field" style="margin:0;min-width:260px"><span>Install into</span><select id="inst">${eligible().map((i) => `<option value="${i.id}" ${i.id === S.target ? 'selected' : ''}>${esc(i.name)} (${LOADER_NAMES[i.loader]} ${esc(i.mc_version)})</option>`).join('')}</select></label></div>
     <div class="tabs" id="tabs">${typesFor(inst).map(([k, v]) => `<button class="tab ${M.type === k ? 'active' : ''}" data-t="${k}">${v}</button>`).join('')}</div>
     <div id="body"></div></div>`;
   $('#inst').onchange = (e) => { S.target = e.target.value; render(el); };
-  $('#tabs').onclick = (e) => { const t = e.target.closest('[data-t]')?.dataset.t; if (t) { M.type = t; M.offset = 0; M.hits = []; render(el); } };
+  $('#tabs').onclick = (e) => { const t = e.target.closest('[data-t]')?.dataset.t; if (t) { M.type = t; M.cat = ''; M.offset = 0; M.hits = []; render(el); } };
   if (M.type === 'installed') return installed(inst);
   if (isRust(inst) && HORIZON_TABS.includes(M.type)) return browseHorizon(inst);
   await browse(inst);
@@ -156,16 +158,25 @@ async function openHorizon(inst, id) {
 
 async function browse(inst) {
   const body = $('#body');
+  const cf = M.source === 'curseforge';
   body.innerHTML = `<div class="filters">
-      <input type="search" id="q" placeholder="Search Modrinth" value="${esc(M.q)}" aria-label="Search">
+      <select id="src" aria-label="Source"><option value="modrinth" ${cf ? '' : 'selected'}>Modrinth</option><option value="curseforge" ${cf ? 'selected' : ''}>CurseForge</option></select>
+      <input type="search" id="q" placeholder="Search ${cf ? 'CurseForge' : 'Modrinth'}" value="${esc(M.q)}" aria-label="Search">
       <select id="cat" aria-label="Category"><option value="">All categories</option></select>
       <select id="sort" aria-label="Sort">${SORTS.map(([k, v]) => `<option value="${k}" ${M.sort === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <label class="row" style="gap:8px;flex-wrap:nowrap"><button class="switch ${M.compat ? 'on' : ''}" id="compat" role="switch" aria-checked="${M.compat}"></button><span>Only compatible</span></label></div>
     <p class="muted" id="count"></p><div class="list" id="hits"></div><div class="row" style="justify-content:center;margin-top:16px"><button class="btn" id="more" hidden>Load more</button></div>`;
+  $('#src').onchange = (e) => { M.source = e.target.value; M.cat = ''; M.offset = 0; M.hits = []; browse(inst); };
+  if (cf && !(await invoke('curseforge_available').catch(() => false))) return keyPanel(inst);
   try {
+    if (cf) {
+      M.ccats[M.type] ??= await invoke('curseforge_categories', { projectType: M.type });
+      $('#cat').innerHTML += M.ccats[M.type].map((c) => `<option value="${esc(c.id)}" ${M.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    } else {
     M.cats ??= await invoke('modrinth_categories');
     const cats = M.cats.filter((c) => c.project_type === (M.type === 'modpack' ? 'modpack' : M.type) && c.header === 'categories');
     $('#cat').innerHTML += cats.map((c) => `<option value="${esc(c.name)}" ${M.cat === c.name ? 'selected' : ''}>${esc(c.name[0].toUpperCase() + c.name.slice(1))}</option>`).join('');
+    }
   } catch { /* filters optional */ }
   let timer;
   $('#q').oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { M.q = e.target.value; search(inst, true); }, 350); };
@@ -181,18 +192,31 @@ async function browse(inst) {
   M.hits.length ? paint() : search(inst, true);
 }
 
+/** CurseForge needs a personal API key: ask for it right where it is needed. */
+function keyPanel(inst) {
+  document.querySelectorAll('.filters > :not(#src)').forEach((e) => { e.style.display = 'none'; });
+  $('#more').hidden = true;
+  $('#hits').innerHTML = `<div class="card"><h3>Connect CurseForge</h3>
+    <p class="muted">CurseForge asks every app to use its own free API key. Create one at <a href="#" data-ext="https://console.curseforge.com">console.curseforge.com</a>, then paste it here. It stays on this computer, in Vesper's settings.</p>
+    <div class="row"><input type="text" id="cfkey" placeholder="CurseForge API key" autocomplete="off" spellcheck="false" style="flex:1;min-width:240px"><button class="btn primary" id="cfsave">Save</button></div></div>`;
+  $('#cfsave').onclick = async () => {
+    const v = $('#cfkey').value.trim(); if (!v) return;
+    try { S.settings.curseforge_api_key = v; await invoke('save_settings', { settings: S.settings }); toast('CurseForge connected', 'ok'); browse(inst); } catch (e) { toast(errMsg(e), 'error'); }
+  };
+}
+
 async function search(inst, reset) {
   if (M.busy) return;
   M.busy = true;
   if (reset) { M.offset = 0; M.hits = []; $('#hits').innerHTML = skeleton(6, 'mod'); }
   try {
-    const r = await invoke('modrinth_search', {
-      query: M.q, projectType: M.type, categories: M.cat ? [M.cat] : [], sort: M.sort, offset: M.offset,
-      loader: M.compat && M.type === 'mod' ? (inst.loader === 'vanilla' ? '' : inst.loader) : '', version: M.compat ? inst.mc_version : '',
-    });
+    const loader = M.compat && M.type === 'mod' ? (inst.loader === 'vanilla' ? '' : inst.loader) : '', version = M.compat ? inst.mc_version : '';
+    const r = M.source === 'curseforge'
+      ? await invoke('curseforge_search', { query: M.q, projectType: M.type, category: M.cat || null, sort: M.sort, offset: M.offset, loader, version })
+      : await invoke('modrinth_search', { query: M.q, projectType: M.type, categories: M.cat ? [M.cat] : [], sort: M.sort, offset: M.offset, loader, version });
     M.hits = reset ? r.hits : M.hits.concat(r.hits); M.total = r.total_hits; M.offset = M.hits.length;
     paint();
-  } catch (e) { $('#hits').innerHTML = `<div class="empty">Could not reach Modrinth: ${esc(errMsg(e))}</div>`; }
+  } catch (e) { $('#hits').innerHTML = `<div class="empty">Could not reach ${M.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}: ${esc(errMsg(e))}</div>`; }
   M.busy = false;
 }
 
@@ -211,11 +235,18 @@ function paint() {
 async function quickInstall(inst, pid, btn, versionId) {
   btn.disabled = true; const old = btn.textContent; btn.textContent = 'Installing...';
   try {
-    if (M.type === 'modpack') {
+    const cf = M.source === 'curseforge';
+    if (M.type === 'modpack' && cf) {
+      const r = await invoke('curseforge_install_modpack', { projectId: pid, fileId: versionId ? +versionId : null });
+      await refreshInstances();
+      toast(r.skipped.length ? `Created instance "${r.instance.name}". ${r.skipped.length} file${r.skipped.length > 1 ? 's' : ''} could not be downloaded because their authors forbid it: see vesper-missing-mods.txt in the instance folder.` : `Created instance "${r.instance.name}". Press Play to finish setup.`, 'ok');
+    } else if (M.type === 'modpack') {
       const i = await invoke('modrinth_install_modpack', { projectId: pid, versionId: versionId ?? null });
       await refreshInstances(); toast(`Created instance "${i.name}". Press Play to finish setup.`, 'ok');
     } else {
-      const names = await invoke('modrinth_install', { instanceId: inst.id, projectId: pid, versionId: versionId ?? null });
+      const names = cf
+        ? await invoke('curseforge_install', { instanceId: inst.id, projectId: pid, fileId: versionId ? +versionId : null })
+        : await invoke('modrinth_install', { instanceId: inst.id, projectId: pid, versionId: versionId ?? null });
       toast(names.length > 1 ? `Installed ${names[names.length - 1]} and ${names.length - 1} required ${names.length === 2 ? 'dependency' : 'dependencies'}` : `Installed ${names[0] ?? 'content'}`, 'ok');
     }
     btn.textContent = 'Installed';
@@ -226,10 +257,14 @@ async function openProject(pid) {
   const inst = target();
   const m = modal('<div class="skel" style="height:220px"></div>', { wide: true });
   let p, vs;
-  try { [p, vs] = await Promise.all([invoke('modrinth_project', { id: pid }), invoke('modrinth_versions', { id: pid })]); } catch (e) { m.close(); return toast(errMsg(e), 'error'); }
+  const cf = M.source === 'curseforge';
+  try {
+    if (cf) { const r = await invoke('curseforge_project', { id: pid }); p = r.project; vs = r.versions; }
+    else [p, vs] = await Promise.all([invoke('modrinth_project', { id: pid }), invoke('modrinth_versions', { id: pid })]);
+  } catch (e) { m.close(); return toast(errMsg(e), 'error'); }
   const allowed = LOADER_COMPAT[inst.loader] || [];
   const fits = (v) => (isRust(inst) && p.project_type !== 'mod') || v.game_versions.includes(inst.mc_version) && (p.project_type !== 'mod' || v.loaders.some((l) => allowed.includes(l)));
-  const tabs = { desc: () => `<div class="desc selectable">${md(p.body)}</div>`,
+  const tabs = { desc: () => `<div class="desc selectable">${md(cf ? cfHtml(p.body) : p.body)}</div>`,
     gallery: () => (p.gallery?.length ? `<div class="gallery">${p.gallery.map((g) => `<figure><img loading="lazy" alt="${esc(g.title || '')}" src="${esc(g.url)}"><figcaption class="muted">${esc(g.title || '')}</figcaption></figure>`).join('')}</div>` : '<p class="muted">No screenshots.</p>'),
     versions: () => vs.slice(0, 60).map((v) => `<div class="ver" style="${fits(v) ? '' : 'opacity:.5'}"><div><b>${esc(v.name)}</b> <span class="badge ${esc(v.version_type)}">${esc(v.version_type)}</span>
         <div class="muted" style="font-size:12.5px">${esc(v.version_number)}, ${esc(v.game_versions.slice(-3).join(', '))}, ${esc(v.loaders.join(', '))}${fits(v) ? '' : ' (not compatible with this instance)'}</div></div>
@@ -238,7 +273,7 @@ async function openProject(pid) {
   m.el.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:16px">
       ${p.icon_url ? `<img class="icon" style="width:72px;height:72px;border-radius:14px" alt="" src="${esc(p.icon_url)}">` : ''}
       <div class="grow"><h2 style="margin:0">${esc(p.title)}</h2><p class="muted">${esc(p.description)}</p>
-        <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(p.downloads)} downloads</span><span class="chip">${esc(p.license?.id || '')}</span></div></div>
+        <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(p.downloads)} downloads</span>${cf ? '<span class="chip">CurseForge</span>' : `<span class="chip">${esc(p.license?.id || '')}</span>`}</div></div>
       <button class="btn primary" id="inst-btn">${p.project_type === 'modpack' ? 'Install as instance' : 'Install'}</button><button class="icon-btn" id="x" aria-label="Close">&#10005;</button></div>
     <div class="tabs" style="margin:16px 0" id="mt">${[['desc', 'Description'], ['gallery', 'Gallery'], ['versions', 'Versions'], ['changelog', 'Changelog']].map(([k, v], i) => `<button class="tab ${i ? '' : 'active'}" data-k="${k}">${v}</button>`).join('')}</div>
     <div id="mb"></div>`;
@@ -258,7 +293,7 @@ async function installed(inst) {
   $('#open').onclick = () => invoke('open_instance_folder', { id: inst.id });
   $('#upd').onclick = async (e) => {
     e.target.disabled = true; e.target.textContent = 'Checking...';
-    try { const n = (await invoke('modrinth_update_all', { instanceId: inst.id })) + (isRust(inst) ? await invoke('horizon_update_all', { instanceId: inst.id }) : 0); toast(n ? `Updated ${n} item${n > 1 ? 's' : ''}` : 'Everything is up to date', 'ok'); } catch (err) { toast(errMsg(err), 'error'); }
+    try { const n = (await invoke('modrinth_update_all', { instanceId: inst.id })) + (await invoke('curseforge_update_all', { instanceId: inst.id })) + (isRust(inst) ? await invoke('horizon_update_all', { instanceId: inst.id }) : 0); toast(n ? `Updated ${n} item${n > 1 ? 's' : ''}` : 'Everything is up to date', 'ok'); } catch (err) { toast(errMsg(err), 'error'); }
     installed(inst);
   };
   let items = [];
@@ -269,7 +304,7 @@ async function installed(inst) {
   const kindName = { mod: 'Mod', resourcepack: 'Resource pack', shader: 'Shader', shaderpack: 'Shader pack' };
   $('#il').innerHTML = items.length ? items.map((i, n) => `<div class="mod" style="grid-template-columns:44px 1fr auto auto;cursor:default">
       ${i.icon ? `<img class="icon" style="width:44px;height:44px" alt="" src="${esc(i.icon)}">` : '<div class="icon" style="width:44px;height:44px"></div>'}
-      <div style="min-width:0"><div class="t">${esc(i.title)}</div><small class="muted">${i.source === 'native' ? 'Built-in mod' : i.source === 'horizon' ? (i.kind === 'mod' ? 'Horizon mod' : 'Horizon ' + (kindName[i.kind] || 'pack').toLowerCase()) : kindName[i.kind]}${i.version_name ? ', ' + esc(i.version_name) : ''}</small></div>
+      <div style="min-width:0"><div class="t">${esc(i.title)}</div><small class="muted">${i.source === 'native' ? 'Built-in mod' : i.source === 'horizon' ? (i.kind === 'mod' ? 'Horizon mod' : 'Horizon ' + (kindName[i.kind] || 'pack').toLowerCase()) : kindName[i.kind] + (i.source === 'curseforge' ? ' (CurseForge)' : '')}${i.version_name ? ', ' + esc(i.version_name) : ''}</small></div>
       ${i.switch === false ? '<span></span>' : `<button class="switch ${i.enabled ? 'on' : ''}" data-n="${n}" data-a="toggle" role="switch" aria-checked="${i.enabled}" aria-label="Enabled"></button>`}
       ${i.source === 'native' ? '<span class="chip">Built in</span>' : `<button class="btn sm danger" data-n="${n}" data-a="rm">Remove</button>`}</div>`).join('')
     : '<div class="empty">Nothing installed yet. Browse the tabs above to add mods, resource packs or shaders.</div>';
