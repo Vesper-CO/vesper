@@ -7,8 +7,10 @@ const TYPES = [['mod', 'Mods'], ['resourcepack', 'Resource packs'], ['shader', '
 const SORTS = [['relevance', 'Most relevant'], ['downloads', 'Most downloaded'], ['follows', 'Most followed'], ['newest', 'Newest'], ['updated', 'Recently updated']];
 const M = { type: 'mod', q: '', cat: '', sort: 'relevance', compat: true, offset: 0, hits: [], total: 0, cats: null, busy: false };
 const LOADER_COMPAT = { fabric: ['fabric'], quilt: ['quilt', 'fabric'], forge: ['forge'], neoforge: ['neoforge'], vanilla: [] };
-const RUST_TYPES = [['mod', 'Mods'], ['resourcepack', 'Resource packs'], ['shader', 'Shaders'], ['installed', 'Installed']];
-const H = { q: '', native: false, offset: 0, hits: [], total: 0, busy: false };
+const RUST_TYPES = [['mod', 'Mods'], ['native', 'Native mods'], ['packs', 'Horizon packs'], ['resourcepack', 'Resource packs'], ['shader', 'Shaders'], ['installed', 'Installed']];
+const HORIZON_TABS = ['mod', 'native', 'packs'];
+const H = { q: '', kind: '', sort: 'relevance', cat: '', cats: [], offset: 0, hits: [], total: 0, busy: false };
+const H_SORTS = [['relevance', 'Most relevant'], ['downloads', 'Most downloaded'], ['stars', 'Most starred'], ['updated', 'Recently updated'], ['new', 'Newest'], ['name', 'Name']];
 const isRust = (i) => i.loader === 'rust';
 const typesFor = (i) => (isRust(i) ? RUST_TYPES : TYPES);
 const eligible = () => S.instances;
@@ -23,32 +25,37 @@ export async function render(el) {
   if (!eligible().some((i) => i.id === S.target)) S.target = eligible()[0].id;
   const inst = target();
   if (isRust(inst) && M.type === 'modpack') M.type = 'mod';
+  if (!isRust(inst) && HORIZON_TABS.includes(M.type) && M.type !== 'mod') M.type = 'mod';
   el.innerHTML = `<div class="page">
-    <div class="page-head"><div><h1>Mod Library</h1><p class="muted">${isRust(inst) ? 'Mods from the Horizon library, packs from Modrinth' : 'Powered by Modrinth'}</p></div>
+    <div class="page-head"><div><h1>Mod Library</h1><p class="muted">${isRust(inst) ? 'The whole Horizon library, plus packs from Modrinth' : 'Powered by Modrinth'}</p></div>
       <label class="field" style="margin:0;min-width:260px"><span>Install into</span><select id="inst">${eligible().map((i) => `<option value="${i.id}" ${i.id === S.target ? 'selected' : ''}>${esc(i.name)} (${LOADER_NAMES[i.loader]} ${esc(i.mc_version)})</option>`).join('')}</select></label></div>
     <div class="tabs" id="tabs">${typesFor(inst).map(([k, v]) => `<button class="tab ${M.type === k ? 'active' : ''}" data-t="${k}">${v}</button>`).join('')}</div>
     <div id="body"></div></div>`;
   $('#inst').onchange = (e) => { S.target = e.target.value; render(el); };
   $('#tabs').onclick = (e) => { const t = e.target.closest('[data-t]')?.dataset.t; if (t) { M.type = t; M.offset = 0; M.hits = []; render(el); } };
   if (M.type === 'installed') return installed(inst);
-  if (isRust(inst) && M.type === 'mod') return browseHorizon(inst);
+  if (isRust(inst) && HORIZON_TABS.includes(M.type)) return browseHorizon(inst);
   await browse(inst);
 }
 
 // ---------- Horizon's mod library (Rust instances) ----------
 
-const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built. The ones marked Built in are in your game: switch each one on or off here (or in the game under Options > Mods). They start off, and a change applies the next time you start the game. The others are not in the build.';
+const NATIVE_NOTE = 'Native mods are compiled into the game when Vesper\'s client is built, and the client is rebuilt every week with every native mod in the library that works on that week\'s Horizon. The ones marked Built in are in your game: switch each one on or off here (or in the game under Options > Mods). They start off, and a change applies the next time you start the game. A mod that is not built in yet will be in a later build.';
 
 async function browseHorizon(inst) {
   const body = $('#body');
+  if (H.kind !== M.type) { H.kind = M.type; H.cat = ''; H.cats = []; H.offset = 0; H.hits = []; H.total = 0; }
+  const nouns = { mod: 'mods', native: 'native mods', packs: 'packs' };
   body.innerHTML = `<div class="filters">
-      <input type="search" id="q" placeholder="Search the Horizon library" value="${esc(H.q)}" aria-label="Search">
-      <label class="row" style="gap:8px;flex-wrap:nowrap"><button class="switch ${H.native ? 'on' : ''}" id="nat" role="switch" aria-checked="${H.native}"></button><span>Show all native mods</span></label></div>
-    <p class="muted" id="count"></p><p class="muted" id="hnote" ${H.native ? '' : 'hidden'}>${NATIVE_NOTE}</p>
+      <input type="search" id="q" placeholder="Search ${nouns[H.kind]} in the Horizon library" value="${esc(H.q)}" aria-label="Search">
+      <label class="field" style="margin:0"><span>Sort</span><select id="hsort">${H_SORTS.map(([k, v]) => `<option value="${k}" ${H.sort === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="field" style="margin:0"><span>Category</span><select id="hcat"></select></label></div>
+    <p class="muted" id="count"></p><p class="muted" id="hnote" ${H.kind === 'native' ? '' : 'hidden'}>${NATIVE_NOTE}</p>
     <div class="list" id="hits"></div><div class="row" style="justify-content:center;margin-top:16px"><button class="btn" id="more" hidden>Load more</button></div>`;
   let timer;
   $('#q').oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { H.q = e.target.value; hsearch(inst, true); }, 350); };
-  $('#nat').onclick = (e) => { H.native = !H.native; e.target.classList.toggle('on', H.native); e.target.setAttribute('aria-checked', H.native); $('#hnote').hidden = !H.native; hsearch(inst, true); };
+  $('#hsort').onchange = (e) => { H.sort = e.target.value; hsearch(inst, true); };
+  $('#hcat').onchange = (e) => { H.cat = e.target.value; hsearch(inst, true); };
   $('#more').onclick = () => hsearch(inst, false);
   $('#hits').onclick = (e) => {
     const card = e.target.closest('[data-h]'); if (!card) return;
@@ -56,7 +63,13 @@ async function browseHorizon(inst) {
     if (e.target.closest('[data-i]')) return hInstall(inst, card.dataset.h, e.target.closest('[data-i]'));
     openHorizon(inst, card.dataset.h);
   };
+  hcats();
   H.hits.length ? hpaint() : hsearch(inst, true);
+}
+
+function hcats() {
+  const sel = $('#hcat'); if (!sel) return;
+  sel.innerHTML = `<option value="">All categories</option>${H.cats.map((c) => `<option value="${esc(c.name)}" ${H.cat === c.name ? 'selected' : ''}>${esc(c.name)} (${c.count})</option>`).join('')}`;
 }
 
 async function hsearch(inst, reset) {
@@ -64,8 +77,9 @@ async function hsearch(inst, reset) {
   H.busy = true;
   if (reset) { H.offset = 0; H.hits = []; $('#hits').innerHTML = skeleton(6, 'mod'); }
   try {
-    const r = await invoke('horizon_search', { instanceId: inst.id, query: H.q, showNative: H.native, offset: H.offset });
+    const r = await invoke('horizon_search', { instanceId: inst.id, query: H.q, kind: H.kind, sort: H.sort, category: H.cat, offset: H.offset });
     H.hits = reset ? r.hits : H.hits.concat(r.hits); H.total = r.total; H.offset = H.hits.length;
+    if (reset) { H.cats = r.categories || []; hcats(); }
     hpaint();
   } catch (e) { const box = $('#hits'); if (box) box.innerHTML = `<div class="empty">Could not load the Horizon library: ${esc(errMsg(e))}</div>`; }
   H.busy = false;
@@ -76,20 +90,23 @@ const hButton = (h) => {
   if (h.installed && !h.update) return '<button class="btn sm" disabled>Installed</button>';
   if (h.installed && h.update) return '<button class="btn primary sm" data-i="1">Update</button>';
   if (h.support === 'ok') return '<button class="btn primary sm" data-i="1">Install</button>';
-  if (h.support === 'builtin') return '<button class="btn sm" disabled>Built in</button>';
-  const why = { native: 'Not in the build', code: 'Not supported', version: 'No 26.3 version', other: 'Not a mod' }[h.support] || 'Unavailable';
+  const why = { native: h.broken ? 'Doesn\'t build yet' : 'Next build', code: 'Not supported', version: 'No 26.3 version', other: 'Not installable' }[h.support] || 'Unavailable';
   return `<button class="btn sm" disabled>${why}</button>`;
 };
 
+const KIND_LABEL = { 'native-mod': 'Native', resourcepack: 'Resource pack', shader: 'Shader pack', shaderpack: 'Shader pack' };
+const ago = (d) => { const t = Date.parse(d); if (!t) return ''; const days = Math.floor((Date.now() - t) / 86400000); return days < 1 ? 'today' : days < 31 ? `${days}d ago` : days < 365 ? `${Math.floor(days / 30)}mo ago` : `${Math.floor(days / 365)}y ago`; };
+
 function hpaint() {
   const box = $('#hits'); if (!box) return;
-  $('#count').textContent = H.total ? `${fmtNum(H.total)} ${H.total === 1 ? 'mod' : 'mods'}` : '';
+  const noun = { mod: 'mod', native: 'native mod', packs: 'pack' }[H.kind] || 'mod';
+  $('#count').textContent = H.total ? `${fmtNum(H.total)} ${noun}${H.total === 1 ? '' : 's'}` : '';
   box.innerHTML = H.hits.length ? H.hits.map((h) => `<div class="mod" data-h="${esc(h.id)}" tabindex="0">
       ${h.icon ? `<img class="icon" loading="lazy" alt="" src="${esc(h.icon)}">` : '<div class="icon"></div>'}
       <div style="min-width:0"><div class="t">${esc(h.name)} <small class="muted">by ${esc((h.authors || []).join(', ') || 'unknown')}</small></div><p>${esc(h.summary)}</p>
-        <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(h.downloads)} downloads</span>${h.version ? `<span class="chip">${esc(h.version)}</span>` : ''}${h.support === 'builtin' ? '<span class="chip">Built in</span>' : h.kind === 'native-mod' ? '<span class="chip">Native</span>' : ''}${(h.categories || []).slice(0, 2).map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
+        <div class="chips" style="margin-top:6px">${h.new ? '<span class="chip" style="color:var(--accent)">New</span>' : ''}<span class="chip">${fmtNum(h.downloads)} downloads</span>${h.stars ? `<span class="chip">&#9733; ${fmtNum(h.stars)}</span>` : ''}${h.version ? `<span class="chip">${esc(h.version)}</span>` : ''}${h.support === 'builtin' ? '<span class="chip">Built in</span>' : KIND_LABEL[h.kind] ? `<span class="chip">${KIND_LABEL[h.kind]}</span>` : ''}${h.updated ? `<span class="chip">Updated ${esc(ago(h.updated) || h.updated)}</span>` : ''}${(h.categories || []).slice(0, 2).map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
       ${hButton(h)}</div>`).join('')
-    : `<div class="empty">${H.native ? 'Nothing found. Try another search.' : 'Nothing found. Turn on "Show all native mods" to also see the ones that are not in the build.'}</div>`;
+    : '<div class="empty">Nothing found. Try another search or category.</div>';
   $('#more').hidden = H.hits.length >= H.total;
 }
 
@@ -121,10 +138,14 @@ async function openHorizon(inst, id) {
   m.el.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:16px">
       ${p.icon ? `<img class="icon" style="width:72px;height:72px;border-radius:14px" alt="" src="${esc(p.icon)}">` : ''}
       <div class="grow"><h2 style="margin:0">${esc(p.name)}</h2><p class="muted">${esc(p.summary)}</p>
-        <div class="chips" style="margin-top:6px"><span class="chip">${fmtNum(p.downloads)} downloads</span>${p.version ? `<span class="chip">${esc(p.version)}</span>` : ''}${p.license ? `<span class="chip">${esc(p.license)}</span>` : ''}</div></div>
+        <div class="chips" style="margin-top:6px">${p.new ? '<span class="chip" style="color:var(--accent)">New</span>' : ''}<span class="chip">${fmtNum(p.downloads)} downloads</span>${p.stars ? `<span class="chip">&#9733; ${fmtNum(p.stars)}</span>` : ''}${p.version ? `<span class="chip">${esc(p.version)}</span>` : ''}${p.license ? `<span class="chip">${esc(p.license)}</span>` : ''}${p.signed ? '<span class="chip">Signed</span>' : ''}${p.updated ? `<span class="chip">Updated ${esc(p.updated)}</span>` : ''}${(p.tags || []).slice(0, 4).map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div></div>
       <button class="btn" id="pg">Open page</button><span id="ib">${hButton(p)}</span><button class="icon-btn" id="x" aria-label="Close">&#10005;</button></div>
     ${p.support === 'builtin' ? '<p class="muted" style="margin-top:12px">Built into your game. Switch it on or off with the switch above; a change applies the next time you start the game.</p>' : p.support === 'native' ? `<p class="muted" style="margin-top:12px">${NATIVE_NOTE}</p>` : ''}
-    <div class="desc selectable" style="margin-top:16px">${md(p.description || p.summary)}</div>`;
+    ${p.broken ? '<p class="muted" style="margin-top:12px">The registry found that this mod does not apply on the newest Horizon, so it is probably missing from the build until its author updates it.</p>' : ''}
+    ${(p.screenshots || []).length ? `<div class="row" style="gap:8px;margin-top:16px;overflow-x:auto;flex-wrap:nowrap">${p.screenshots.map((u) => `<img alt="" loading="lazy" style="height:140px;border-radius:10px" src="${esc(u)}">`).join('')}</div>` : ''}
+    <div class="desc selectable" style="margin-top:16px">${md(p.description || p.summary)}</div>
+    ${(p.versions || []).length ? `<h3 style="margin:20px 0 8px">Versions</h3><div class="list">${p.versions.map((v) => `<div class="row" style="justify-content:space-between;gap:12px"><div><b>${esc(v.version)}</b> <small class="muted">${esc(v.game || '')}${v.side ? ', ' + esc(v.side) : ''}${v.published ? ', ' + esc(v.published) : ''}${v.taken_down ? ', taken down' : ''}${v.broken ? ', does not build on the newest Horizon' : ''}</small>${v.changelog ? `<div class="muted selectable" style="font-size:12px;margin-top:2px">${esc(v.changelog.split('\n')[0].slice(0, 160))}</div>` : ''}</div></div>`).join('')}</div>` : ''}
+    ${(p.owners || []).length ? `<p class="muted" style="margin-top:16px">By ${esc((p.authors || []).join(', ') || p.owners.join(', '))}${p.source ? ` &middot; <a href="${esc(p.source)}" data-ext="${esc(p.source)}">Source</a>` : ''}</p>` : ''}`;
   $('#x', m.el).onclick = m.close;
   $('#pg', m.el).onclick = () => invoke('open_url', { url: p.page });
   const ib = $('#ib [data-i]', m.el);
@@ -245,11 +266,11 @@ async function installed(inst) {
     items = await invoke('modrinth_installed', { instanceId: inst.id });
     if (isRust(inst)) items = (await invoke('horizon_builtin', { instanceId: inst.id })).concat(await invoke('horizon_installed', { instanceId: inst.id }), items);
   } catch (e) { $('#il').innerHTML = `<div class="empty">${esc(errMsg(e))}</div>`; return; }
-  const kindName = { mod: 'Mod', resourcepack: 'Resource pack', shader: 'Shader' };
+  const kindName = { mod: 'Mod', resourcepack: 'Resource pack', shader: 'Shader', shaderpack: 'Shader pack' };
   $('#il').innerHTML = items.length ? items.map((i, n) => `<div class="mod" style="grid-template-columns:44px 1fr auto auto;cursor:default">
       ${i.icon ? `<img class="icon" style="width:44px;height:44px" alt="" src="${esc(i.icon)}">` : '<div class="icon" style="width:44px;height:44px"></div>'}
-      <div style="min-width:0"><div class="t">${esc(i.title)}</div><small class="muted">${i.source === 'native' ? 'Built-in mod' : i.source === 'horizon' ? 'Horizon mod' : kindName[i.kind]}${i.version_name ? ', ' + esc(i.version_name) : ''}</small></div>
-      <button class="switch ${i.enabled ? 'on' : ''}" data-n="${n}" data-a="toggle" role="switch" aria-checked="${i.enabled}" aria-label="Enabled"></button>
+      <div style="min-width:0"><div class="t">${esc(i.title)}</div><small class="muted">${i.source === 'native' ? 'Built-in mod' : i.source === 'horizon' ? (i.kind === 'mod' ? 'Horizon mod' : 'Horizon ' + (kindName[i.kind] || 'pack').toLowerCase()) : kindName[i.kind]}${i.version_name ? ', ' + esc(i.version_name) : ''}</small></div>
+      ${i.switch === false ? '<span></span>' : `<button class="switch ${i.enabled ? 'on' : ''}" data-n="${n}" data-a="toggle" role="switch" aria-checked="${i.enabled}" aria-label="Enabled"></button>`}
       ${i.source === 'native' ? '<span class="chip">Built in</span>' : `<button class="btn sm danger" data-n="${n}" data-a="rm">Remove</button>`}</div>`).join('')
     : '<div class="empty">Nothing installed yet. Browse the tabs above to add mods, resource packs or shaders.</div>';
   $('#il').onclick = async (e) => {

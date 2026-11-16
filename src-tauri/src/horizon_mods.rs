@@ -5,17 +5,19 @@
 //! is checked against it before it reaches the game folder: HTTPS from GitHub's release servers, the
 //! size and SHA-256 the index lists, a plain file name, and the index's list of files taken down.
 //!
-//! Content mods (`.hmod` files with no code) are installed here: the game reads them from
-//! `horizon-mods/` when it starts. Native mods (`.hnmod`, 100+ of the library) are Rust source that is
-//! compiled into the game itself: Vesper's client is built with the ones listed in the `vesper-rust`
-//! repository's `native-mods.txt` (they show as "Built in", and are switched on and off in the game's
-//! Options > Mods). The others are listed but cannot be installed one by one.
+//! What can be installed here: content mods (`.hmod`, no code: the game reads them from `horizon-mods/` when it
+//! starts), resource packs (`.zip`, into `resourcepacks/`) and Horizon shader packs (`.hshader`, or an OptiFine/Iris
+//! `.zip`, into `shaderpacks/`). Native mods (`.hnmod`, 100+ of the library) are Rust source that is compiled into
+//! the game itself: Vesper's client is built with every native mod the library lists that applies and compiles on
+//! that week's Horizon (see the `vesper-rust` build), so a mod the library gained shows up in the next build. They
+//! show as "Built in", and are switched on and off in the game's Options > Mods or here. One that did not make it
+//! into the installed build (it needs a newer build, or does not apply to this Horizon) is listed but not installable.
 use crate::{download::client, error::CmdResult, instances, paths};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, path::PathBuf, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{collections::{HashMap, HashSet}, path::PathBuf, sync::{Arc, Mutex}, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 
 const INDEX_URL: &str = "https://horizon-rust.github.io/horizon-mods/index.json";
 const SITE: &str = "https://playhorizon.dev/mods";
@@ -23,6 +25,8 @@ const MAX_INDEX: usize = 16 << 20;
 const MAX_FILE: u64 = 64 << 20;
 const FRESH: Duration = Duration::from_secs(600);
 const PAGE: usize = 20;
+/// A project listed in the last week is marked New.
+const NEW_DAYS: u64 = 7;
 
 // ---------- the index ----------
 
@@ -65,6 +69,20 @@ struct Project {
     #[serde(default)]
     downloads: u64,
     #[serde(default)]
+    stars: u64,
+    /// The newest version's date (`2026-10-24`), set by the library's publish job.
+    #[serde(default)]
+    updated: String,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    owners: Vec<String>,
+    #[serde(default)]
+    screenshots: Vec<String>,
+    /// The author's minisign key: when set, every version is signed with it.
+    #[serde(default)]
+    key: Option<String>,
+    #[serde(default)]
     versions: Vec<Version>,
 }
 
@@ -74,7 +92,16 @@ struct Version {
     #[serde(default)]
     game: String,
     #[serde(default)]
+    published: String,
+    #[serde(default)]
+    changelog: String,
+    #[serde(default)]
+    side: String,
+    #[serde(default)]
     capabilities: Vec<String>,
+    /// A native mod's Horizon commits that horizon-mixins refused it on (the registry tests every one daily).
+    #[serde(default)]
+    broken_on: Vec<Value>,
     file: File,
 }
 
@@ -84,12 +111,16 @@ struct File {
     url: String,
     size: u64,
     sha256: String,
+    #[serde(default)]
+    signature: Option<String>,
 }
 
 struct Loaded {
     at: Instant,
     projects: Arc<Vec<Project>>,
     revoked: Arc<Vec<Revoked>>,
+    /// Ids the library gained in the last week (seen first by this Vesper after its first look).
+    new: Arc<HashSet<String>>,
 }
 static LOADED: Mutex<Option<Loaded>> = Mutex::new(None);
 
@@ -105,9 +136,44 @@ fn parse(text: &str) -> Result<(Vec<Project>, Vec<Revoked>)> {
     Ok((projects, idx.revoked))
 }
 
-fn fresh() -> Option<(Arc<Vec<Project>>, Arc<Vec<Revoked>>)> {
+type Lib = (Arc<Vec<Project>>, Arc<Vec<Revoked>>, Arc<HashSet<String>>);
+
+fn fresh() -> Option<Lib> {
     let g = LOADED.lock().unwrap();
-    g.as_ref().filter(|l| l.at.elapsed() < FRESH).map(|l| (l.projects.clone(), l.revoked.clone()))
+    g.as_ref().filter(|l| l.at.elapsed() < FRESH).map(|l| (l.projects.clone(), l.revoked.clone(), l.new.clone()))
+}
+
+fn unix_now() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
+
+/// Which projects are new: the first look records every id (none of those is new), and an id that turns up later
+/// is new for a week, so the page can show what the library gained since Vesper last looked.
+#[derive(Serialize, Deserialize, Default)]
+struct Seen {
+    since: u64,
+    ids: HashMap<String, u64>,
+}
+fn seen_ids_path() -> PathBuf { paths::rust().join("horizon-seen.json") }
+fn track_new(projects: &[Project]) -> HashSet<String> {
+    let now = unix_now();
+    let mut seen: Seen = std::fs::read(seen_ids_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let first = seen.since == 0;
+    if first {
+        seen.since = now;
+    }
+    let mut changed = first;
+    for p in projects {
+        if !seen.ids.contains_key(&p.id) {
+            seen.ids.insert(p.id.clone(), if first { 0 } else { now });
+            changed = true;
+        }
+    }
+    if changed {
+        let _ = std::fs::create_dir_all(paths::rust());
+        if let Ok(b) = serde_json::to_vec(&seen) {
+            let _ = std::fs::write(seen_ids_path(), b);
+        }
+    }
+    seen.ids.into_iter().filter(|(_, t)| *t > 0 && now.saturating_sub(*t) < NEW_DAYS * 86_400).map(|(k, _)| k).collect()
 }
 
 async fn fetch_text() -> Result<String> {
@@ -122,7 +188,7 @@ async fn fetch_text() -> Result<String> {
 
 /// The library: the copy fetched in the last ten minutes, else a fresh one (kept on disk), else the
 /// copy kept last time, so browsing still works offline.
-async fn library() -> Result<(Arc<Vec<Project>>, Arc<Vec<Revoked>>)> {
+async fn library() -> Result<Lib> {
     if let Some(l) = fresh() {
         return Ok(l);
     }
@@ -130,29 +196,31 @@ async fn library() -> Result<(Arc<Vec<Project>>, Arc<Vec<Revoked>>)> {
         Ok(text) => parse(&text).map(|p| (p, text)),
         Err(e) => Err(e),
     };
-    let (projects, revoked) = match fetched {
+    let (projects, revoked, online) = match fetched {
         Ok(((p, r), text)) => {
             let _ = std::fs::create_dir_all(paths::rust());
             let _ = std::fs::write(cache_path(), text);
-            (p, r)
+            (p, r, true)
         }
         Err(e) => match std::fs::read_to_string(cache_path()).ok().and_then(|k| parse(&k).ok()) {
-            Some(kept) => kept,
+            Some((p, r)) => (p, r, false),
             None => return Err(e),
         },
     };
-    let (projects, revoked) = (Arc::new(projects), Arc::new(revoked));
-    *LOADED.lock().unwrap() = Some(Loaded { at: Instant::now(), projects: projects.clone(), revoked: revoked.clone() });
-    Ok((projects, revoked))
+    let new = if online { track_new(&projects) } else { HashSet::new() };
+    let (projects, revoked, new) = (Arc::new(projects), Arc::new(revoked), Arc::new(new));
+    *LOADED.lock().unwrap() = Some(Loaded { at: Instant::now(), projects: projects.clone(), revoked: revoked.clone(), new: new.clone() });
+    Ok((projects, revoked, new))
 }
 
 fn is_revoked(revoked: &[Revoked], id: &str, sha: &str) -> bool {
     revoked.iter().any(|r| r.id == id && r.sha256.as_ref().map_or(true, |h| h.eq_ignore_ascii_case(sha)))
 }
 
-/// The newest version made for this Minecraft version that was not taken down.
+/// The newest version made for this Minecraft version that was not taken down. A pack that names no game fits any.
 fn pick<'a>(p: &'a Project, revoked: &[Revoked], game: &str) -> Option<&'a Version> {
-    p.versions.iter().find(|v| v.game == game && !is_revoked(revoked, &p.id, &v.file.sha256))
+    let any = p.kind != "mod" && p.kind != "native-mod";
+    p.versions.iter().find(|v| (v.game == game || (any && v.game.is_empty())) && !is_revoked(revoked, &p.id, &v.file.sha256))
 }
 
 /// A `.hmod` with code is not run by the game any more; only content (capability `registries`) is.
@@ -160,21 +228,60 @@ fn has_code(v: &Version) -> bool {
     v.file.name.ends_with(".hmod") && v.capabilities.iter().any(|c| c != "registries")
 }
 
+/// Where a kind's file goes in the game folder.
+#[derive(Clone, Copy, PartialEq)]
+enum Place {
+    Mod,
+    Resource,
+    Shader,
+}
+fn place(kind: &str, file: &str) -> Option<Place> {
+    match kind {
+        "mod" if file.ends_with(".hmod") => Some(Place::Mod),
+        "resourcepack" if file.ends_with(".zip") => Some(Place::Resource),
+        "shader" if file.ends_with(".hshader") => Some(Place::Shader),
+        "shaderpack" if file.ends_with(".zip") => Some(Place::Shader),
+        _ => None,
+    }
+}
+fn dir_for(inst: &str, place: Place) -> PathBuf {
+    match place {
+        Place::Mod => mods_dir(inst),
+        Place::Resource => paths::game_dir(inst).join("resourcepacks"),
+        Place::Shader => paths::game_dir(inst).join("shaderpacks"),
+    }
+}
+/// The kind an installed item was (old manifests have none: a mod).
+fn item_place(i: &Item) -> Place {
+    match i.kind.as_str() {
+        "resourcepack" => Place::Resource,
+        "shader" | "shaderpack" => Place::Shader,
+        _ => Place::Mod,
+    }
+}
+
 /// "builtin" (a native mod compiled into the installed client), "ok" (installable), "native" (a native
 /// mod that is not in the client), "code" (a code mod the game no longer runs),
-/// "version" (nothing for this Minecraft version), "other" (not a mod: modpacks, worlds...).
+/// "version" (nothing for this Minecraft version), "other" (a kind that is not installed here: modpacks, worlds...).
 fn support(p: &Project, revoked: &[Revoked], game: &str) -> &'static str {
     if p.kind == "native-mod" {
         return if crate::rust::builtin_ids().contains(&p.id) { "builtin" } else { "native" };
     }
-    if p.kind != "mod" {
+    if !matches!(p.kind.as_str(), "mod" | "resourcepack" | "shader" | "shaderpack") {
         return "other";
     }
     match pick(p, revoked, game) {
         None => "version",
         Some(v) if has_code(v) => "code",
+        Some(v) if place(&p.kind, &v.file.name).is_none() => "other",
         Some(_) => "ok",
     }
+}
+
+/// Whether the newest version of a native mod was refused by horizon-mixins on a recent Horizon (the registry tries
+/// every native mod each day): such a mod is likely missing from the build.
+fn broken(p: &Project) -> bool {
+    p.kind == "native-mod" && p.versions.first().is_some_and(|v| !v.broken_on.is_empty())
 }
 
 // ---------- what is installed in an instance ----------
@@ -188,6 +295,9 @@ struct Item {
     sha256: String,
     #[serde(default)]
     icon: String,
+    /// The library kind: `mod` (also what old manifests mean), `resourcepack`, `shader`, `shaderpack`.
+    #[serde(default)]
+    kind: String,
 }
 
 fn manifest_path(inst: &str) -> PathBuf { paths::instance_dir(inst).join("vesper-horizon.json") }
@@ -313,10 +423,19 @@ fn check_url(url: &str) -> Result<()> {
     Ok(())
 }
 
-async fn download_checked(f: &File) -> Result<Vec<u8>> {
+/// A signed project's file must carry a signature that verifies with the project's minisign key; an unsigned
+/// project (no key) is installed on its checksum alone, as the library says.
+fn verify_signature(bytes: &[u8], key: &str, signature: Option<&str>, name: &str) -> Result<()> {
+    let sig = signature.filter(|s| !s.trim().is_empty()).ok_or_else(|| anyhow!("{name} comes from a project with a signing key but has no signature, so it was not installed."))?;
+    let pk = minisign_verify::PublicKey::from_base64(key.trim()).map_err(|_| anyhow!("The library lists an unreadable signing key for {name}, so it was not installed."))?;
+    let sg = minisign_verify::Signature::decode(sig).map_err(|_| anyhow!("The signature of {name} is unreadable, so it was not installed."))?;
+    pk.verify(bytes, &sg, true).map_err(|_| anyhow!("The signature of {name} does not match its project's key, so it was not installed."))
+}
+
+async fn download_checked(f: &File, kind: &str, key: Option<&str>) -> Result<Vec<u8>> {
     check_url(&f.url)?;
     paths::safe_file_name(&f.name)?;
-    if !f.name.ends_with(".hmod") {
+    if place(kind, &f.name).is_none() {
         bail!("Unexpected file type: {}", f.name);
     }
     if f.size == 0 || f.size > MAX_FILE || f.sha256.len() != 64 || !f.sha256.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -334,6 +453,9 @@ async fn download_checked(f: &File) -> Result<Vec<u8>> {
     if hex::encode(Sha256::digest(&bytes)) != f.sha256.to_ascii_lowercase() {
         bail!("{} did not match its checksum, so it was not installed.", f.name);
     }
+    if let Some(key) = key.filter(|k| !k.trim().is_empty()) {
+        verify_signature(&bytes, key, f.signature.as_deref(), &f.name)?;
+    }
     Ok(bytes)
 }
 
@@ -341,15 +463,16 @@ async fn install_one(inst: &str, game: &str, p: &Project, revoked: &[Revoked]) -
     match support(p, revoked, game) {
         "ok" => {}
         "builtin" => bail!("{} is already built into the game.", p.name),
-        "native" => bail!("{} is a native mod: it has to be compiled into the game, and is not in this build of it.", p.name),
+        "native" => bail!("{} is a native mod: it has to be compiled into the game, and is not in this build of it. Vesper's client is rebuilt every week with the native mods the library lists.", p.name),
         "code" => bail!("{} contains code that the game no longer runs.", p.name),
-        "other" => bail!("{} is not a mod.", p.name),
+        "other" => bail!("Vesper cannot install a {} yet.", p.kind),
         _ => bail!("{} has no version for Minecraft {game}.", p.name),
     }
     let v = pick(p, revoked, game).ok_or_else(|| anyhow!("{} has no version for Minecraft {game}.", p.name))?;
-    let bytes = download_checked(&v.file).await?;
+    let pl = place(&p.kind, &v.file.name).ok_or_else(|| anyhow!("Unexpected file type: {}", v.file.name))?;
+    let bytes = download_checked(&v.file, &p.kind, p.key.as_deref()).await?;
 
-    let dir = mods_dir(inst);
+    let dir = dir_for(inst, pl);
     std::fs::create_dir_all(&dir)?;
     let part = dir.join(format!(".{}.part", v.file.name));
     std::fs::write(&part, &bytes)?;
@@ -359,13 +482,16 @@ async fn install_one(inst: &str, game: &str, p: &Project, revoked: &[Revoked]) -
     if let Some(pos) = items.iter().position(|i| i.id == p.id) {
         let old = items.remove(pos);
         if old.filename != v.file.name {
-            let _ = std::fs::remove_file(dir.join(&old.filename));
+            let _ = std::fs::remove_file(dir_for(inst, item_place(&old)).join(&old.filename));
         }
     }
-    items.push(Item { id: p.id.clone(), title: p.name.clone(), version: v.version.clone(), filename: v.file.name.clone(), sha256: v.file.sha256.to_ascii_lowercase(), icon: p.icon.clone().unwrap_or_default() });
+    items.push(Item { id: p.id.clone(), title: p.name.clone(), version: v.version.clone(), filename: v.file.name.clone(), sha256: v.file.sha256.to_ascii_lowercase(), icon: p.icon.clone().unwrap_or_default(), kind: p.kind.clone() });
     write_items(inst, &items)?;
-    // Installed means on: the game's Options > Mods still has the switch.
-    set_enabled(inst, &p.id, true)
+    // A mod is installed switched on: the game's Options > Mods still has the switch. Packs are picked in the game.
+    if pl == Place::Mod {
+        set_enabled(inst, &p.id, true)?;
+    }
+    Ok(())
 }
 
 fn load_rust_instance(id: &str) -> Result<instances::Instance> {
@@ -378,65 +504,107 @@ fn load_rust_instance(id: &str) -> Result<instances::Instance> {
 
 // ---------- commands ----------
 
-fn hit(p: &Project, support: &str, installed: Option<&Item>, game: &str, revoked: &[Revoked]) -> Value {
+fn hit(p: &Project, support: &str, installed: Option<&Item>, game: &str, revoked: &[Revoked], new: &HashSet<String>) -> Value {
     let newest = pick(p, revoked, game).map(|v| v.version.clone()).unwrap_or_default();
     json!({
         "id": p.id, "kind": p.kind, "name": p.name, "summary": p.summary,
-        "authors": p.authors, "icon": p.icon, "downloads": p.downloads, "categories": p.categories,
-        "version": newest, "support": support,
+        "authors": p.authors, "icon": p.icon, "downloads": p.downloads, "stars": p.stars, "updated": p.updated,
+        "categories": p.categories, "version": newest, "support": support,
         "installed": installed.is_some(),
         "update": installed.is_some_and(|i| !newest.is_empty() && i.version != newest),
+        "new": new.contains(&p.id), "broken": broken(p),
     })
 }
 
+/// The groups of the Horizon page: content mods, native mods, and packs (resource and shader).
+fn in_group(p: &Project, group: &str) -> bool {
+    match group {
+        "native" => p.kind == "native-mod",
+        "packs" => matches!(p.kind.as_str(), "resourcepack" | "shader" | "shaderpack"),
+        _ => p.kind == "mod",
+    }
+}
+
+/// `kind` is "mod", "native" or "packs"; `sort` is "relevance", "downloads", "stars", "updated", "new" or "name";
+/// `category` is one of the categories this call returns, or empty.
 #[tauri::command]
-pub async fn horizon_search(instance_id: String, query: String, show_native: bool, offset: usize) -> CmdResult<Value> {
+pub async fn horizon_search(instance_id: String, query: String, kind: String, sort: String, category: String, offset: usize) -> CmdResult<Value> {
     let inst = load_rust_instance(&instance_id)?;
-    let (projects, revoked) = library().await?;
+    let (projects, revoked, new) = library().await?;
     let items = read_items(&instance_id);
     let words: Vec<String> = query.to_lowercase().split_whitespace().map(String::from).collect();
-    let built: HashSet<String> = crate::rust::builtin_ids().into_iter().collect();
-    let mut found: Vec<&Project> = projects
-        .iter()
-        .filter(|p| p.kind == "mod" || (p.kind == "native-mod" && (show_native || built.contains(&p.id))))
+    let group: Vec<&Project> = projects.iter().filter(|p| in_group(p, &kind)).collect();
+    // The categories of this group, most used first, so the page can offer them as a filter.
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for p in &group {
+        for c in &p.categories {
+            *counts.entry(c.as_str()).or_default() += 1;
+        }
+    }
+    let mut cats: Vec<(&str, usize)> = counts.into_iter().collect();
+    cats.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    let categories: Vec<Value> = cats.into_iter().map(|(n, c)| json!({ "name": n, "count": c })).collect();
+
+    let mut found: Vec<&Project> = group
+        .into_iter()
+        .filter(|p| category.is_empty() || p.categories.iter().any(|c| *c == category))
         .filter(|p| {
-            let hay = format!("{} {} {} {} {}", p.id, p.name, p.summary, p.authors.join(" "), p.categories.join(" ")).to_lowercase();
+            let hay = format!("{} {} {} {} {} {}", p.id, p.name, p.summary, p.authors.join(" "), p.categories.join(" "), p.tags.join(" ")).to_lowercase();
             words.iter().all(|w| hay.contains(w.as_str()))
         })
         .collect();
-    // What is in the game first, then what can be installed, then the rest; the most downloaded first.
     let rank = |p: &Project| match support(p, &revoked, &inst.mc_version) { "builtin" => 0, "ok" => 1, _ => 2 };
-    found.sort_by_key(|p| (rank(p), std::cmp::Reverse(p.downloads)));
+    match sort.as_str() {
+        "downloads" => found.sort_by_key(|p| std::cmp::Reverse(p.downloads)),
+        "stars" => found.sort_by_key(|p| (std::cmp::Reverse(p.stars), std::cmp::Reverse(p.downloads))),
+        "updated" => found.sort_by(|a, b| b.updated.cmp(&a.updated).then(b.downloads.cmp(&a.downloads))),
+        "new" => found.sort_by(|a, b| new.contains(&b.id).cmp(&new.contains(&a.id)).then(b.updated.cmp(&a.updated))),
+        "name" => found.sort_by_key(|p| p.name.to_lowercase()),
+        // What is in the game first, then what can be installed, then the rest; the most downloaded first.
+        _ => found.sort_by_key(|p| (rank(p), std::cmp::Reverse(p.downloads))),
+    }
     let total = found.len();
+    let built: HashSet<String> = crate::rust::builtin_ids().into_iter().collect();
     let hits: Vec<Value> = found
         .into_iter()
         .skip(offset)
         .take(PAGE)
-        .map(|p| hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked))
-        .collect();
-    let hits: Vec<Value> = hits
-        .into_iter()
-        .map(|mut h| {
-            if h["support"] == "builtin" {
-                h["on"] = json!(native_on(&instance_id, h["id"].as_str().unwrap_or("")));
+        .map(|p| {
+            let mut h = hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked, &new);
+            if built.contains(&p.id) {
+                h["on"] = json!(native_on(&instance_id, &p.id));
             }
             h
         })
         .collect();
-    Ok(json!({ "hits": hits, "total": total }))
+    Ok(json!({ "hits": hits, "total": total, "categories": categories }))
 }
 
 #[tauri::command]
 pub async fn horizon_project(instance_id: String, id: String) -> CmdResult<Value> {
     let inst = load_rust_instance(&instance_id)?;
-    let (projects, revoked) = library().await?;
+    let (projects, revoked, new) = library().await?;
     let p = projects.iter().find(|p| p.id == id).ok_or_else(|| anyhow!("That mod is not in the library"))?;
     let items = read_items(&instance_id);
-    let mut v = hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked);
+    let mut v = hit(p, support(p, &revoked, &inst.mc_version), items.iter().find(|i| i.id == p.id), &inst.mc_version, &revoked, &new);
     v["description"] = json!(p.description);
     v["license"] = json!(p.license);
     v["source"] = json!(p.source);
     v["page"] = json!(format!("{SITE}/{}", p.id));
+    v["tags"] = json!(p.tags);
+    v["owners"] = json!(p.owners);
+    v["signed"] = json!(p.key.as_ref().is_some_and(|k| !k.trim().is_empty()));
+    v["screenshots"] = json!(p.screenshots.iter().filter(|u| u.starts_with("https://")).take(6).collect::<Vec<_>>());
+    v["versions"] = json!(p
+        .versions
+        .iter()
+        .take(8)
+        .map(|x| json!({
+            "version": x.version, "game": x.game, "published": x.published, "side": x.side,
+            "changelog": x.changelog.chars().take(600).collect::<String>(),
+            "taken_down": is_revoked(&revoked, &p.id, &x.file.sha256), "broken": !x.broken_on.is_empty(),
+        }))
+        .collect::<Vec<_>>());
     if v["support"] == "builtin" {
         v["on"] = json!(native_on(&instance_id, &p.id));
     }
@@ -446,7 +614,7 @@ pub async fn horizon_project(instance_id: String, id: String) -> CmdResult<Value
 #[tauri::command]
 pub async fn horizon_install(instance_id: String, id: String) -> CmdResult<String> {
     let inst = load_rust_instance(&instance_id)?;
-    let (projects, revoked) = library().await?;
+    let (projects, revoked, _) = library().await?;
     let p = projects.iter().find(|p| p.id == id).ok_or_else(|| anyhow!("That mod is not in the library"))?;
     install_one(&instance_id, &inst.mc_version, p, &revoked).await?;
     Ok(p.name.clone())
@@ -483,14 +651,18 @@ pub fn horizon_native_toggle(instance_id: String, id: String) -> CmdResult<bool>
 #[tauri::command]
 pub fn horizon_installed(instance_id: String) -> CmdResult<Vec<Value>> {
     paths::safe_id(&instance_id)?;
-    let dir = mods_dir(&instance_id);
     Ok(read_items(&instance_id)
         .into_iter()
-        .filter(|i| dir.join(&i.filename).exists())
-        .map(|i| json!({
-            "project_id": i.id, "title": i.title, "version_name": i.version, "icon": i.icon,
-            "filename": i.filename, "kind": "mod", "source": "horizon", "enabled": is_enabled(&instance_id, &i.id),
-        }))
+        .filter(|i| dir_for(&instance_id, item_place(i)).join(&i.filename).exists())
+        .map(|i| {
+            let pl = item_place(&i);
+            json!({
+                "project_id": i.id, "title": i.title, "version_name": i.version, "icon": i.icon,
+                "filename": i.filename, "kind": if i.kind.is_empty() { "mod" } else { i.kind.as_str() }, "source": "horizon",
+                // Only mods have a switch here; a pack is picked in the game's own menus.
+                "enabled": pl != Place::Mod || is_enabled(&instance_id, &i.id), "switch": pl == Place::Mod,
+            })
+        })
         .collect())
 }
 
@@ -509,20 +681,25 @@ pub fn horizon_toggle(instance_id: String, id: String) -> CmdResult<bool> {
 pub fn horizon_remove(instance_id: String, id: String) -> CmdResult<()> {
     paths::safe_id(&instance_id)?;
     let mut items = read_items(&instance_id);
+    let mut was_mod = true;
     if let Some(i) = items.iter().find(|i| i.id == id) {
         paths::safe_file_name(&i.filename)?;
-        let _ = std::fs::remove_file(mods_dir(&instance_id).join(&i.filename));
+        was_mod = item_place(i) == Place::Mod;
+        let _ = std::fs::remove_file(dir_for(&instance_id, item_place(i)).join(&i.filename));
     }
     items.retain(|i| i.id != id);
     write_items(&instance_id, &items)?;
-    Ok(set_enabled(&instance_id, &id, false)?)
+    if was_mod {
+        set_enabled(&instance_id, &id, false)?;
+    }
+    Ok(())
 }
 
 /// Install the newest version of everything installed that has a newer one; returns how many.
 #[tauri::command]
 pub async fn horizon_update_all(instance_id: String) -> CmdResult<usize> {
     let inst = load_rust_instance(&instance_id)?;
-    let (projects, revoked) = library().await?;
+    let (projects, revoked, _) = library().await?;
     let mut n = 0;
     for item in read_items(&instance_id) {
         let Some(p) = projects.iter().find(|p| p.id == item.id) else { continue };
@@ -532,7 +709,7 @@ pub async fn horizon_update_all(instance_id: String) -> CmdResult<usize> {
         }
         let was_on = is_enabled(&instance_id, &item.id);
         install_one(&instance_id, &inst.mc_version, p, &revoked).await?;
-        if !was_on {
+        if item_place(&item) == Place::Mod && !was_on {
             set_enabled(&instance_id, &item.id, false)?;
         }
         n += 1;
