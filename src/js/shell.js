@@ -9,9 +9,9 @@ let views = {};
 export const registerViews = (v) => (views = v);
 
 export function buildNav() {
-  $('#nav').innerHTML = '<span class="nav-ind"></span>' + NAV.map(([id, label]) => `<button class="nav-item" data-nav="${id}">${ICON[id]}<span>${label}</span></button>`).join('')
-    // not a page: a link that opens the Discord invite in the browser (main.js opens any a[data-ext])
-    + `<a class="nav-item" href="${COMMUNITY}" data-ext="${COMMUNITY}">${ICON.community}<span>Community</span></a>`;
+  $('#nav').innerHTML = '<span class="nav-ind"></span>' + NAV.map(([id, label]) => `<button class="nav-item" data-nav="${id}">${ICON[id]}<span>${label}</span></button>`).join('');
+  // not a page: a link that opens the Discord invite in the browser (main.js opens any a[data-ext]); sits above the account chip
+  $('#side-extra').innerHTML = `<a class="nav-item" href="${COMMUNITY}" data-ext="${COMMUNITY}">${ICON.community}<span>Community</span></a>`;
   $('#nav').addEventListener('click', (e) => { const b = e.target.closest('[data-nav]'); if (b) go(b.dataset.nav); });
   $('#acct-chip').addEventListener('click', () => go('accounts'));
   renderChip();
