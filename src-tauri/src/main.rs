@@ -138,7 +138,6 @@ fn main() {
             modrinth::modrinth_toggle,
             modrinth::modrinth_remove,
             modrinth::modrinth_update_all,
-            curseforge::curseforge_available,
             curseforge::curseforge_categories,
             curseforge::curseforge_search,
             curseforge::curseforge_project,

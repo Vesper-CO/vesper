@@ -11,7 +11,7 @@ Join the Discord for help, feedback and updates: https://discord.gg/FpHGhHCwgU
 - Minecraft, its assets and libraries belong to Mojang/Microsoft. Vesper never bundles or redistributes them: everything is downloaded from Mojang's servers onto the user's PC, and the user must own Minecraft: Java Edition. There is no offline or cracked mode.
 - Follow Mojang's [Commercial Usage Guidelines](https://www.minecraft.net/en-us/usage-guidelines) and do not use Mojang logos or imply endorsement.
 - Modrinth content keeps its authors' licenses. Respect the Modrinth API terms and the User-Agent rule.
-- CurseForge is built in too (pick it in the Mod Library's Source box). It needs a free personal API key from console.curseforge.com, pasted in Settings, or baked into a build with the `CURSEFORGE_API_KEY` environment variable. CurseForge content keeps its authors' licenses; files whose authors forbid downloads by other apps are not downloaded.
+- CurseForge is built in too (pick it in the Mod Library's Source box) with Vesper's own API key. CurseForge content keeps its authors' licenses; files whose authors forbid downloads by other apps are not downloaded.
 - Forge and NeoForge installers are downloaded from their official Maven servers and run locally.
 
 ## Rust mode

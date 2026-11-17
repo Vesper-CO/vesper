@@ -2,15 +2,15 @@
 //! modpack import and update-all. It plugs into the same per-instance `vesper-content.json` that
 //! Modrinth uses, so installed content from both sites is listed, toggled and removed the same way.
 //!
-//! The API needs a personal key (free, console.curseforge.com). The user pastes it in Settings; a build
-//! can also bake one in with the `CURSEFORGE_API_KEY` environment variable at compile time.
+//! The API needs a key: Vesper's own is built in (a build can override it with the `CURSEFORGE_API_KEY`
+//! environment variable at compile time).
 //! Results are reshaped here into the same JSON the Modrinth commands return, so the UI is shared.
 use crate::{
     download::*,
     error::CmdResult,
     instances::{self, Instance},
     modrinth::{kind_dir, loaders_for, read_items, write_items, Item},
-    paths, settings,
+    paths,
 };
 use anyhow::{anyhow, bail, Result};
 use futures_util::future::BoxFuture;
@@ -27,22 +27,18 @@ const SOURCE: &str = "curseforge";
 
 // ---------- plumbing ----------
 
+/// Vesper's CurseForge API key.
+const API_KEY: &str = "$2a$10$lscLRRH0bZ55a8DeWmVnfeni2UnQHWXEgHsbhUfQelPslT2bhRLHm";
+
 fn api_key() -> Result<String> {
-    let mut k = settings::load().curseforge_api_key.trim().to_string();
-    if k.is_empty() {
-        k = option_env!("CURSEFORGE_API_KEY").unwrap_or("").trim().to_string();
-    }
-    if k.is_empty() {
-        bail!("CurseForge needs an API key. Get a free one at console.curseforge.com and paste it in Settings.");
-    }
-    Ok(k)
+    Ok(option_env!("CURSEFORGE_API_KEY").filter(|k| !k.trim().is_empty()).unwrap_or(API_KEY).trim().to_string())
 }
 
 async fn send(req: reqwest::RequestBuilder) -> Result<Value> {
     let r = req.header("x-api-key", api_key()?).send().await?;
     let status = r.status().as_u16();
     if status == 401 || status == 403 {
-        bail!("CurseForge rejected the API key. Check it in Settings.");
+        bail!("CurseForge rejected Vesper's API key.");
     }
     Ok(r.error_for_status()?.json().await?)
 }
@@ -187,11 +183,6 @@ async fn pick_file(mod_id: u64, inst: &Instance, kind: &str) -> Result<Value> {
 }
 
 // ---------- browsing ----------
-
-#[tauri::command]
-pub fn curseforge_available() -> bool {
-    api_key().is_ok()
-}
 
 #[tauri::command]
 pub async fn curseforge_categories(project_type: String) -> CmdResult<Vec<Value>> {

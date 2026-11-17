@@ -20,11 +20,6 @@ export async function render(el) {
       <label class="field"><span>Default memory for new instances: <b id="ramv">${ramLabel(s.default_ram_mb)}</b></span><input type="range" id="ram" min="1024" max="16384" step="512" value="${s.default_ram_mb}"></label>
       <label class="field"><span>Custom java.exe (optional)</span><input type="text" id="java" value="${esc(s.java_path)}" placeholder="Leave empty to use the Java that Mojang provides"></label>
     </div>
-    <h2>CurseForge</h2>
-    <div class="card">
-      <label class="field"><span>CurseForge API key</span><input type="text" id="cfkey" value="${esc(s.curseforge_api_key || '')}" placeholder="Needed to browse CurseForge in the Mod Library" autocomplete="off" spellcheck="false"></label>
-      <p class="muted" style="margin:0">CurseForge gives every app its own free key. Create one at <a href="#" data-ext="https://console.curseforge.com">console.curseforge.com</a>. It stays on this computer.</p>
-    </div>
     <h2>Discord</h2>
     <div class="card" id="dc"></div>
     <h2>Updates</h2>
@@ -38,7 +33,6 @@ export async function render(el) {
   $('#ram').oninput = (e) => { S.settings.default_ram_mb = +e.target.value; $('#ramv').textContent = ramLabel(+e.target.value); };
   $('#ram').onchange = save;
   $('#java').onchange = (e) => { S.settings.java_path = e.target.value; save(); };
-  $('#cfkey').onchange = (e) => { S.settings.curseforge_api_key = e.target.value.trim(); save(); };
   $('#auto').onclick = (e) => { S.settings.auto_update = !S.settings.auto_update; e.target.classList.toggle('on', S.settings.auto_update); e.target.setAttribute('aria-checked', S.settings.auto_update); save(); };
   const dc = $('#dc');
   let avail = false;

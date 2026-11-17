@@ -183,7 +183,6 @@ async function browse(inst) {
       <label class="row" style="gap:8px;flex-wrap:nowrap"><button class="switch ${M.compat ? 'on' : ''}" id="compat" role="switch" aria-checked="${M.compat}"></button><span>Only compatible</span></label></div>
     <p class="muted" id="count"></p><div class="list" id="hits"></div><div class="row" style="justify-content:center;margin-top:16px"><button class="btn" id="more" hidden>Load more</button></div>`;
   $('#src').onchange = (e) => { M.source = e.target.value; M.cat = ''; M.offset = 0; M.hits = []; browse(inst); };
-  if (cf && !(await invoke('curseforge_available').catch(() => false))) return keyPanel(inst);
   try {
     if (cf) {
       M.ccats[M.type] ??= await invoke('curseforge_categories', { projectType: M.type });
@@ -206,19 +205,6 @@ async function browse(inst) {
     openProject(card.dataset.p);
   };
   M.hits.length ? paint() : search(inst, true);
-}
-
-/** CurseForge needs a personal API key: ask for it right where it is needed. */
-function keyPanel(inst) {
-  document.querySelectorAll('.filters > :not(#src)').forEach((e) => { e.style.display = 'none'; });
-  $('#more').hidden = true;
-  $('#hits').innerHTML = `<div class="card"><h3>Connect CurseForge</h3>
-    <p class="muted">CurseForge asks every app to use its own free API key. Create one at <a href="#" data-ext="https://console.curseforge.com">console.curseforge.com</a>, then paste it here. It stays on this computer, in Vesper's settings.</p>
-    <div class="row"><input type="text" id="cfkey" placeholder="CurseForge API key" autocomplete="off" spellcheck="false" style="flex:1;min-width:240px"><button class="btn primary" id="cfsave">Save</button></div></div>`;
-  $('#cfsave').onclick = async () => {
-    const v = $('#cfkey').value.trim(); if (!v) return;
-    try { S.settings.curseforge_api_key = v; await invoke('save_settings', { settings: S.settings }); toast('CurseForge connected', 'ok'); browse(inst); } catch (e) { toast(errMsg(e), 'error'); }
-  };
 }
 
 async function search(inst, reset) {
